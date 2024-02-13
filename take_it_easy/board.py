@@ -76,13 +76,17 @@ class Board:
         self.refresh_button = pygame.Rect(WIDTH * 0.42, HEIGHT * 0.9, 130, 80)
 
     def action_by_mouse(self, pos: tuple) -> None:
+        idx = 0
         for col in self.tiles:
             for tile in col:
                 if tile.contains_point(pos) and tile.numbers == [0,0,0]:
                     tile.numbers = self.current_tile.numbers
                     self._next_tile()
+                    return idx, True
+                idx += 1
         if self.refresh_button.collidepoint(*pos):
             self.refresh()
+        return None, False
                 
     def action_by_id(self, pos: tuple) -> bool:
         """ for interaction with ai """

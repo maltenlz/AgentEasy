@@ -16,8 +16,16 @@ def main():
         clock.tick(FPS)
         for event in pygame.event.get():
             if event.type == pygame.MOUSEBUTTONUP:
-                #board.action_by_mouse(event.pos)
-                board.action_by_id((3,3))
+                # save previous state
+                state_t = transform_state(board)
+                score_t = board.smooth_value
+                action, valid = board.action_by_mouse(event.pos)
+                if valid:
+                    state_t1 = transform_state(board)
+                    score_t1 = board.smooth_value
+                    reward = score_t1 - score_t
+                    # save transition
+                #board.action_by_id((3,3))
             if event.type == pygame.MOUSEBUTTONUP:
                 pass
             if event.type == pygame.QUIT:

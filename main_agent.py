@@ -73,7 +73,6 @@ def transform_state(board):
     x_input += [len(remaining_numbers)]
     return x_input
 
-
 def main():
     run = True
     i = 0 

@@ -11,6 +11,7 @@ EPS_START = 0.9
 EPS_END = 0.05
 EPS_DECAY = 40000
 MAX_MEMORY = 10000000
+            eps_threshold = EPS_END + (EPS_START - EPS_END) * math.exp(-1. * steps_done / EPS_DECAY)
 
 class AgentEasy:
     """ Agent that plays and learns the game."""
