@@ -17,8 +17,7 @@ TILE_POSITIONS = [[(0,1), (0,2), (0,3)],
 
 ### Lookup tables to calculate the score
 
-
-
+ALL_NUMBERS = list(itertools.product([1,5,9], [3,4,8], [2,6,7]))
 
 ### utility functions to calculate the center points of the tiles, to know where to draw them -> to tile class again?
 def get_center_points(i, j, height):
@@ -48,7 +47,7 @@ class Board:
                             [(9,i) for i in range(6)] + 
                             [(10,i) for i in range(6)])
         self.remaining_tiles = []
-        self.open_numbers = list(itertools.product([1,5,9], [3,4,8], [2,6,7]))
+        self.open_numbers = ALL_NUMBERS
         for number in self.open_numbers:
             tile = Tile(*get_center_points(*REMAINING_POSIONS.pop(), BOARD_HEIGHT))
             tile.numbers = number

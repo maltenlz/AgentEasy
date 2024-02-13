@@ -9,7 +9,7 @@ import numpy as np
 
 EPS_START = 0.9
 EPS_END = 0.05
-EPS_DECAY = 1000
+EPS_DECAY = 10000
 MAX_MEMORY = 10000000
 
 class AgentEasy:
@@ -19,7 +19,7 @@ class AgentEasy:
         self.state_dim = 19
         self.memory = deque(maxlen=MAX_MEMORY)
         self.policy_net = EasyNet()
-        self.target_net = None
+        self.target_net = EasyNet()
         self.trainer = QTrainer(self.policy_net, self.target_net, 0.000001, 0.9)
 
     def act(self, state, board: Board, steps_done = 0):
@@ -28,10 +28,10 @@ class AgentEasy:
         if possible_moves:
             sample = random.random()
             eps_threshold = EPS_END + (EPS_START - EPS_END) * math.exp(-1. * steps_done / EPS_DECAY)
+            print(eps_threshold)
             if sample > eps_threshold and steps_done > 50:
                 idxs = [move[1] for move in possible_moves]
                 preds = self.policy_net.predict_value(state)
-                print(preds)
                 idstar = np.argmax([preds[idx] for idx in idxs])
                 return possible_moves[idstar]
             else:
@@ -62,5 +62,5 @@ class AgentEasy:
             for j, tile in enumerate(row):
                 if tile.numbers == [0, 0, 0]:
                     moves.append([(i,j), idx])
-                    idx += 1
+                idx += 1
         return moves

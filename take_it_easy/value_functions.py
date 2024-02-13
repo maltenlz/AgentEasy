@@ -1,5 +1,5 @@
 from take_it_easy.constants import STRAIGHT_LINES, DIAGS_LEFT, DIAGS_RIGHT
-DISOUNT_FACTOR = 0.5
+DISOUNT_FACTOR = 0.6
 
 ### utility functions to calcualte points at the end of the game
 def score_straight(board, scoring_func):
