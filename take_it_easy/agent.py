@@ -10,7 +10,7 @@ import json
 
 EPS_START = 0.3
 EPS_END = 0.05
-EPS_DECAY = 4000000
+EPS_DECAY = 40000
 MAX_MEMORY = 10000000
 
 class AgentEasy:

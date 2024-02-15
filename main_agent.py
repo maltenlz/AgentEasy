@@ -59,7 +59,6 @@ def plot_progress(scores, mean_scores):
     plt.pause(.1)
 
 
-
 def main():
     run = True
     i = 0 
@@ -88,7 +87,7 @@ def main():
             reward = score_t1 - score_t
             agent.chache(state_t, choice[1], state_t1, reward, board.finished)
             agent.synch_nets()
-            if i > 128*19:
+            if i > 20*19:
                 agent.learn()
             # if i % 250 == 0:
                 

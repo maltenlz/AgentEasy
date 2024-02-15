@@ -10,8 +10,8 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 GAMMA = 0.99
-LR = 1e-5
-SIZE_SCALER = 16
+LR = 1e-3
+SIZE_SCALER = 4
 TAU = 0.005
 # Setup:
 # predict value of the boardstate resulting from a move
@@ -29,7 +29,7 @@ class EasyNet(nn.Module):
     def __init__(self):
         super(EasyNet, self).__init__()
         # 19 tiles plus tile to be placed times 28 (all possible tiles plus no tile) one hot encoded remaining vector and remaining tiles
-        self.layer1 = nn.Linear(20*28 + 28 + 1, 4*128*SIZE_SCALER)
+        self.layer1 = nn.Linear(20*28 + 20*10 + 28 + 1, 4*128*SIZE_SCALER)
         self.layer2 = nn.Linear(4 * 128*SIZE_SCALER, 128*SIZE_SCALER)
         self.layer3 = nn.Linear(128*SIZE_SCALER, 19)
         self.to(device)
@@ -49,9 +49,9 @@ class EasyNet(nn.Module):
 
 class QTrainer:
     """ Class to perform training steps on the DQN """
-    def __init__(self, policy_net, target_net, lr, gamma):
-        self.lr = lr
-        self.gamma = gamma
+    def __init__(self, policy_net, target_net):
+        self.lr = LR
+        self.gamma = GAMMA
         self.target_net = target_net
         self.policy_net = policy_net
         self.optimizer = optim.Adam(policy_net.parameters(), lr=LR)
