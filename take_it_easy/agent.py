@@ -6,12 +6,12 @@ from collections import deque
 from take_it_easy.model import EasyNet, QTrainer
 import math
 import numpy as np
+import json
 
-EPS_START = 0.9
+EPS_START = 0.3
 EPS_END = 0.05
-EPS_DECAY = 40000
+EPS_DECAY = 4000000
 MAX_MEMORY = 10000000
-            eps_threshold = EPS_END + (EPS_START - EPS_END) * math.exp(-1. * steps_done / EPS_DECAY)
 
 class AgentEasy:
     """ Agent that plays and learns the game."""
@@ -29,7 +29,8 @@ class AgentEasy:
         if possible_moves:
             sample = random.random()
             eps_threshold = EPS_END + (EPS_START - EPS_END) * math.exp(-1. * steps_done / EPS_DECAY)
-            if sample > eps_threshold and steps_done > 50:
+            print(eps_threshold)
+            if sample > eps_threshold:
                 idxs = [move[1] for move in possible_moves]
                 preds = self.policy_net.predict_value(state)
                 idstar = np.argmax([preds[idx] for idx in idxs])
@@ -43,7 +44,7 @@ class AgentEasy:
         self.memory.append((state_t, action, state_t1, reward, finished))
     
     def learn(self):
-        batch = random.choices(self.memory, k = 1024)
+        batch = random.choices(self.memory, k = 128)
         self.trainer.train_step(*zip(*batch))
 
     def save_nnet(self):

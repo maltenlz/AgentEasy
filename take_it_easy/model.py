@@ -75,14 +75,13 @@ class QTrainer:
 
         pred = self.policy_net(state)
         target = pred.clone()
-        # Create a mask for non-terminal states (i.e., where done is False)
-        not_done_mask = torch.logical_not(done)
-        # Calculate max Q-values from target network
-        max_next_q_values = torch.max(self.target_net(next_state), dim=1).values  
-        # Update Q_new values where the episode is not done
-        Q_new = reward + GAMMA * max_next_q_values * not_done_mask
-        # Update the target tensor
-        target[torch.arange(len(target)), action] = Q_new 
+
+        done = torch.tensor(done, dtype=torch.bool)  
+        not_done_mask = torch.logical_not(done)  
+        future_Q_values = torch.max(self.target_net(next_state), dim=1)[0]
+        Q_new = reward + GAMMA * future_Q_values * not_done_mask
+
+        target[torch.arange(len(action)), action] = Q_new 
 
         self.optimizer.zero_grad()
         loss = self.criterion(target, pred)
