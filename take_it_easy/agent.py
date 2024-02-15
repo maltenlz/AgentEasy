@@ -43,7 +43,7 @@ class AgentEasy:
     
     def learn(self):
         batch = random.choices(self.memory, k = 1024)
-        self.trainer.train_step(zip(*batch))
+        self.trainer.train_step(*zip(*batch))
 
     def save_nnet(self):
         self.policy_net.save()
