@@ -20,7 +20,7 @@ class AgentEasy:
         self.memory = deque(maxlen=MAX_MEMORY)
         self.policy_net = EasyNet()
         self.target_net = EasyNet()
-        self.trainer = QTrainer(self.policy_net, self.target_net, 0.000001, 0.9)
+        self.trainer = QTrainer(self.policy_net, self.target_net)
 
     def act(self, state, board: Board, steps_done = 0):
         """ Dummy agent that just places a random tile on a random position"""
@@ -43,12 +43,8 @@ class AgentEasy:
     
     def learn(self):
         batch = random.choices(self.memory, k = 1024)
-        state_t = [b[0] for b in batch]
-        action = [b[1] for b in batch]
-        state_t1 = [b[2] for b in batch]
-        reward = [b[3] for b in batch]
-        finished = [b[4] for b in batch]
-        self.trainer.train_step(state_t, action, state_t1, reward, finished)
+        self.trainer.train_step(zip(*batch))
+
     def save_nnet(self):
         self.policy_net.save()
         
