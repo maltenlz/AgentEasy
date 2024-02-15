@@ -9,9 +9,9 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-GAMMA = 0.9
+GAMMA = 0.99
 LR = 1e-5
-SIZE_SCALER = 4
+SIZE_SCALER = 16
 TAU = 0.005
 # Setup:
 # predict value of the boardstate resulting from a move
@@ -19,11 +19,8 @@ TAU = 0.005
 # basically regression
 
 # if GPU is to be used
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(device)
-
-Transition = namedtuple('Transition',
-                        ('state', 'action', 'next_state', 'reward'))
 
 
 class EasyNet(nn.Module):
@@ -32,9 +29,10 @@ class EasyNet(nn.Module):
     def __init__(self):
         super(EasyNet, self).__init__()
         # 19 tiles plus tile to be placed times 28 (all possible tiles plus no tile) one hot encoded remaining vector and remaining tiles
-        self.layer1 = nn.Linear(20*28 + 28 + 1, 128*SIZE_SCALER)
-        self.layer2 = nn.Linear(128*SIZE_SCALER, 128*SIZE_SCALER)
+        self.layer1 = nn.Linear(20*28 + 28 + 1, 4*128*SIZE_SCALER)
+        self.layer2 = nn.Linear(4 * 128*SIZE_SCALER, 128*SIZE_SCALER)
         self.layer3 = nn.Linear(128*SIZE_SCALER, 19)
+        self.to(device)
 
     def forward(self, x):
         x = F.relu(self.layer1(x))
@@ -42,9 +40,12 @@ class EasyNet(nn.Module):
         return self.layer3(x)  # No activation function, raw Q-values
     
     def predict_value(self, x):
-        state = torch.tensor(x, dtype = torch.float)
-        return self(state).tolist()
-
+        state = torch.tensor(x, dtype = torch.float).to(device)
+        preds = self(state)
+        return preds.cpu().tolist()
+    
+    def save(self):
+        torch.save(self, 'model_checkpoint.pth')
 
 class QTrainer:
     """ Class to perform training steps on the DQN """
@@ -57,10 +58,12 @@ class QTrainer:
         self.criterion = nn.MSELoss()
 
     def train_step(self, state, action, next_state, reward, done):
-        state = torch.tensor(state, dtype=torch.float)
-        next_state = torch.tensor(next_state, dtype=torch.float)
-        action = torch.tensor(action, dtype=torch.long)
-        reward = torch.tensor(reward, dtype=torch.float)
+        state = torch.tensor(state, dtype=torch.float).to(device)
+        next_state = torch.tensor(next_state, dtype=torch.float).to(device)
+        action = torch.tensor(action, dtype=torch.long).to(device)
+        reward = torch.tensor(reward, dtype=torch.float).to(device)
+        done = torch.tensor(done, dtype=torch.bool).to(device)
+
         # (n, x)
         if len(state.shape) == 1:
             # (1, x)
@@ -69,23 +72,26 @@ class QTrainer:
             action = torch.unsqueeze(action, 0)
             reward = torch.unsqueeze(reward, 0)
             done = (done, )
-        # 1: predicted Q values with current state
+
         pred = self.policy_net(state)
         target = pred.clone()
-        for idx in range(len(done)):
-            Q_new = reward[idx]
-            if not done[idx]:
-                Q_new = reward[idx] + GAMMA * torch.max(self.target_net(next_state[idx]))
-            target[idx][action[idx]] = Q_new
+        # Create a mask for non-terminal states (i.e., where done is False)
+        not_done_mask = torch.logical_not(done)
+        # Calculate max Q-values from target network
+        max_next_q_values = torch.max(self.target_net(next_state), dim=1).values  
+        # Update Q_new values where the episode is not done
+        Q_new = reward + GAMMA * max_next_q_values * not_done_mask
+        # Update the target tensor
+        target[torch.arange(len(target)), action] = Q_new 
 
         self.optimizer.zero_grad()
         loss = self.criterion(target, pred)
         loss.backward()
-        torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), clip_value=10.0)  # By value
+        torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), clip_value=1.0)  # By value
         self.optimizer.step()
     
     def update_target(self):
-        """Soft update model parameters.
+        """Soft update target model parameters. DDQN.
         θ_target = τ*θ_local + (1 - τ)*θ_target
         """  
         for target_param, local_param in zip(self.target_net.parameters(), self.policy_net.parameters()):

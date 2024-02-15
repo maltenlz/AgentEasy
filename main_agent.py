@@ -17,9 +17,9 @@ Possible improvements:
     2.1) seperapte script that captures games
     2.2) save games to disk in appropriate format
 
-3) prepare PC for training -> GPU -> increase size!
-    3.1) Increase network size!
-    3.2) Increase batch size!
+3) prepare PC for training -> GPU -> increase size!  ✘
+    3.1) Increase network size!  ✘
+    3.2) Increase batch size!  ✘
 
 4) Implement checkpoints to save the model every 5000 games or so
 """
@@ -36,10 +36,10 @@ def plot(scores, mean_scores):
     plt.title('Training...')
     plt.xlabel('Number of Games')
     plt.ylabel('Score')
-    plt.plot(scores)
+    #plt.plot(scores)
     plt.plot(mean_scores)
     plt.ylim(ymin=0)
-    plt.text(len(scores)-1, scores[-1], str(scores[-1]))
+    #plt.text(len(scores)-1, scores[-1], str(scores[-1]))
     plt.text(len(mean_scores)-1, mean_scores[-1], str(mean_scores[-1]))
     plt.show(block=False)
     plt.pause(.1)
@@ -101,7 +101,7 @@ def main():
             reward = score_t1 - score_t
             agent.chache(state_t, choice[1], state_t1, reward, board.finished)
             agent.synch_nets()
-            if i > 128*6:
+            if i > 128*19:
                 agent.learn()
             # if i % 250 == 0:
                 
@@ -113,8 +113,10 @@ def main():
             if i % 10 == 0:
                 plot(plot_scores, plot_mean_scores)
             board.refresh()
-        board.draw_board()
-        pygame.display.update()
+        #board.draw_board()
+        if i % 200 == 0:
+            agent.save_nnet()
+        #pygame.display.update()
     pygame.quit()
 
 if __name__ == "__main__":

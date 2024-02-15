@@ -9,7 +9,7 @@ import numpy as np
 
 EPS_START = 0.9
 EPS_END = 0.05
-EPS_DECAY = 10000
+EPS_DECAY = 40000
 MAX_MEMORY = 10000000
 
 class AgentEasy:
@@ -28,7 +28,6 @@ class AgentEasy:
         if possible_moves:
             sample = random.random()
             eps_threshold = EPS_END + (EPS_START - EPS_END) * math.exp(-1. * steps_done / EPS_DECAY)
-            print(eps_threshold)
             if sample > eps_threshold and steps_done > 50:
                 idxs = [move[1] for move in possible_moves]
                 preds = self.policy_net.predict_value(state)
@@ -43,14 +42,16 @@ class AgentEasy:
         self.memory.append((state_t, action, state_t1, reward, finished))
     
     def learn(self):
-        batch = random.choices(self.memory, k = 128)
+        batch = random.choices(self.memory, k = 1024)
         state_t = [b[0] for b in batch]
         action = [b[1] for b in batch]
         state_t1 = [b[2] for b in batch]
         reward = [b[3] for b in batch]
         finished = [b[4] for b in batch]
         self.trainer.train_step(state_t, action, state_t1, reward, finished)
-    
+    def save_nnet(self):
+        self.policy_net.save()
+        
     def synch_nets(self):
         self.trainer.update_target()
 
