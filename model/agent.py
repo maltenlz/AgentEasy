@@ -3,6 +3,7 @@ import random
 from model.thinker import Thinker
 from take_it_easy.value_functions import actual_score
 from model.memory import  Memory, Experience
+from model.exploration import EpsilonGreedyStrategy, ExplorationStrategy
 import math
 import numpy as np
 import json
@@ -35,11 +36,12 @@ class AgentEasy:
     def __init__(
             self,
             thinker: Thinker,
-            memory: Memory
+            memory: Memory,
+            exploration_strategy: ExplorationStrategy
             ):
         self.thinker = thinker
         self.replay_memory = memory
-        self.exploration_strategy = choose_epsilon_greedy
+        self.exploration_strategy = exploration_strategy
         self.value_function = actual_score
         self.eps_start = 0.25
         self.eps_end = 0.05
@@ -61,11 +63,10 @@ class AgentEasy:
             ):
         state_t = self.translate_board(board)
         score_t = self.value_function(board)
-        loc, predicted_action = self.exploration_strategy(
-                                                          self, 
-                                                          state_t, 
-                                                          board.get_open_moves(),
-                                                          self.n_actions
+        predictions = self.thinker.predict(state_t)
+        loc, predicted_action = self.exploration_strategy.choose_next_move(
+                                                          predictions,
+                                                          board.get_open_moves()
                                                           )
         board.action_by_id(loc)
         state_t1 = self.translate_board(board)
@@ -89,37 +90,7 @@ class AgentEasy:
 
 
 
-def choose_epsilon_greedy(agent, state, possible_moves, current_episode = 0):
-    """ Chooses the next move based on the epsilon greedy strategy """
-    if possible_moves:
-        sample = random.random()
-        eps_threshold = EPS_END + (EPS_START - EPS_END) * math.exp(-1. * current_episode / EPS_DECAY)
-        if sample > eps_threshold:
-            idxs = [move[1] for move in possible_moves]
-            preds = agent.thinker.predict(state)
-            preds_allowed_moves = [preds[idx] for idx in idxs]
-            idstar = np.argmax(preds_allowed_moves)
-            return possible_moves[idstar]
-        else:
-            rand_move = random.choice(possible_moves)
-            return rand_move
 
-def choose_boltzman(agent, state, possible_moves, current_episode = 0):
-    """ Chooses the next move based on boltzman exploration """
-    #print(f'Possible moves: {possible_moves}')
-    tau = TAU_MAX * math.exp(-DECAY_RATE * current_episode)
-    if possible_moves:
-        idxs = [move[1] for move in possible_moves]
-        
-        preds = agent.policy_net.predict_value(state)
-        probs = softmax([preds[idx] for idx in idxs], tau = tau)
-        #print('\n'.join([f"{move[0]}; {prob}. Q: {preds[idx]}" for move, prob, idx in zip(possible_moves, probs, idxs)]))
-
-        #print(f'Probs: {probs}')
-        idx_star = np.random.choice(range(len(possible_moves)), p=probs)
-        #print(f'Chosen move: {possible_moves[idx_star]}')
-        return possible_moves[idx_star]
-    
 def softmax(q_values, tau=1.0):
     exp_values = np.exp(np.array(q_values) / tau)  # Scale by temperature
     probs = exp_values / np.sum(exp_values)

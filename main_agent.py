@@ -38,7 +38,7 @@ from take_it_easy.board import Board
 from model.memory import SimpleReplayBuffer
 from model.thinker import Thinker, EasyNet
 from model.agent import AgentEasy
-
+from model.exploration import EpsilonGreedyStrategy, ExplorationConfig
 
 WIN = pygame.display.set_mode((WIDTH, HEIGHT))
 FPS = 60
@@ -78,9 +78,12 @@ def main():
     
     memory = SimpleReplayBuffer(capacity=200000)
     
+    exploration_strategy = EpsilonGreedyStrategy(config = ExplorationConfig())
+
     agent = AgentEasy(
         thinker=thinker,
-        memory = memory
+        memory = memory,
+        exploration_strategy = exploration_strategy
         )
 
     # agent.study_games('molt_plays.json')

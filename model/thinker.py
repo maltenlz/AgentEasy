@@ -47,7 +47,8 @@ class Thinker:
     """ 
        Class that contains the thinking of the Agent. 
     """
-    def __init__(self,
+    def __init__(
+                 self,
                  nnet_class: type[nn.Module],
                  optimizer: optim.Optimizer = optim.Adam,
                  learning_config: ThinkerConfig = ThinkerConfig()
