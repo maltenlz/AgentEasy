@@ -1,5 +1,5 @@
 from take_it_easy.constants import STRAIGHT_LINES, DIAGS_LEFT, DIAGS_RIGHT
-DISOUNT_FACTOR = 0.6
+DISOUNT_FACTOR = 1
 
 ### utility functions to calcualte points at the end of the game
 def score_straight(board, scoring_func):
@@ -18,12 +18,19 @@ def score_line(numbers:list):
 
 def score_line_smooth(numbers:list):
     non_zeroes = [n for n in numbers if n != 0]
+    # only one number
+    numbers_placed = len(non_zeroes)
+    line_length = len(numbers)
     if len(set(non_zeroes)) == 1:
-        if len(non_zeroes) == len(numbers):
+        # completly filled
+        if numbers_placed == line_length:
             return sum(non_zeroes)
         else:
-            return sum(non_zeroes) * DISOUNT_FACTOR
+            # small reward to continue lines
+            # actually should become larger the longer the line is
+            return sum(non_zeroes) * numbers_placed/line_length * DISOUNT_FACTOR
     return 0
 
-def board_value(board, scoring_func):
+def actual_score(board, scoring_func = score_line):
     return score_straight(board, scoring_func) + score_left_diags(board, scoring_func) + score_right_diags(board, scoring_func)
+

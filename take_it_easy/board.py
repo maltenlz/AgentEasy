@@ -4,7 +4,7 @@ import random
 
 from take_it_easy.constants import WHITE, BLACK, WIDTH, HEIGHT, BOARD_HEIGHT, TILE_BACKGROUND
 from take_it_easy.tile import Tile
-from take_it_easy.value_functions import board_value, score_line, score_line_smooth
+from take_it_easy.value_functions import actual_score, score_line, score_line_smooth
 pygame.font.init()
 
 ### Lookup tables to get the ordering correct
@@ -33,6 +33,7 @@ def get_center_points(i, j, height):
 #### 3. save scores
 #############################################
 
+
 class Board:
     """ Implements the game logic and drawing of the board """
     def __init__(self, win) -> None:
@@ -42,10 +43,10 @@ class Board:
     def _create_pool(self) -> None:
         ### POSITIONS of the remaining tiles
         REMAINING_POSIONS = ([(6,i) for i in range(6)] +
-                            [(7,i) for i in range(6)] +
-                            [(8,i) for i in range(6)] + 
-                            [(9,i) for i in range(6)] + 
-                            [(10,i) for i in range(6)])
+                             [(7,i) for i in range(6)] +
+                             [(8,i) for i in range(6)] + 
+                             [(9,i) for i in range(6)] + 
+                             [(10,i) for i in range(6)])
         self.remaining_tiles = []
         self.open_numbers = ALL_NUMBERS
         for number in self.open_numbers:
@@ -74,7 +75,19 @@ class Board:
         self._create_pool()
         self._next_tile()
         self.refresh_button = pygame.Rect(WIDTH * 0.42, HEIGHT * 0.9, 130, 80)
+        self.act_button = pygame.Rect(WIDTH * 0.01, HEIGHT * 0.9, 130, 80)
 
+    def get_open_moves(self):
+        """ Returns all possible moves on the board """
+        moves = []
+        idx = 0
+        for i, row in enumerate(self.tiles):
+            for j, tile in enumerate(row):
+                if tile.numbers == [0, 0, 0]:
+                    moves.append([(i,j), idx])
+                idx += 1
+        return moves
+    
     def action_by_mouse(self, pos: tuple) -> None:
         idx = 0
         for col in self.tiles:
@@ -82,11 +95,13 @@ class Board:
                 if tile.contains_point(pos) and tile.numbers == [0,0,0]:
                     tile.numbers = self.current_tile.numbers
                     self._next_tile()
-                    return idx, True
+                    return idx, 'manual place'
                 idx += 1
         if self.refresh_button.collidepoint(*pos):
             self.refresh()
-        return None, False
+        if self.act_button.collidepoint(*pos):
+            return None, 'agent act'
+        return None, 'invalid click'
                 
     def action_by_id(self, pos: tuple) -> bool:
         """ for interaction with ai """
@@ -95,7 +110,7 @@ class Board:
             self._next_tile()
         else:
             raise ValueError("Tile already placed")
-
+        
     def draw_board(self) -> None:
         self.win.fill(WHITE)
         for col in self.tiles:
@@ -107,6 +122,7 @@ class Board:
             self.current_tile.draw_tile(self.win)
         pygame.draw.line(self.win, BLACK, (WIDTH * 0.55, 0), (WIDTH * 0.55, HEIGHT), 4)
         self._draw_refresh()
+        self._draw_agent_act()
         if self.tiles_placed == 19:
             self._draw_score()
 
@@ -119,9 +135,17 @@ class Board:
         text_rect = text_surface.get_rect(center=self.refresh_button.center)
         self.win.blit(text_surface, text_rect)
 
+    def _draw_agent_act(self):
+        font_size = 24
+        text = "Agent Act"
+        pygame.draw.rect(self.win, TILE_BACKGROUND, self.act_button)
+        font = pygame.font.Font(None, font_size)
+        text_surface = font.render(text, True, BLACK)
+        text_rect = text_surface.get_rect(center=self.act_button.center)
+        self.win.blit(text_surface, text_rect)
+
     def _calculate_score(self) -> None:
-        self.calculated_score = board_value(self, score_line)
-        self.smooth_value = board_value(self, score_line_smooth)
+        self.calculated_score = actual_score(self)
 
     def _draw_score(self):
         font = pygame.font.SysFont("helvetica", 100, bold = True)

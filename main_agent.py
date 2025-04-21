@@ -2,7 +2,7 @@
 DDQN Agent that plays the game TakeItEasy.
 Currently uses Double Q Learning with soft updates and gradient clipping.
 Possible improvements:
-1) try different representations of the tiles, currently no way of checking is certain tiles can still come ✘
+1) try different representations of the tiles, currently no way of checking is certain tiles can still come
 27 tiles. therefore 28 one-hoty-encoding for each field. -> harder to learn but much more potential ✘
 
 2) kickstart learning by providing a set of decent moves ~ 100 games or so
@@ -23,23 +23,30 @@ Possible improvements:
         5.3.1) Decrease Gamma
         5.3.2) Target network Tau
         5.3.3) Learning Rate
-"""
 
+6) instead of predicting the action, construct all possible states after the action and predict the value of each state
+    6.1) choose the action with the highest value
+    6.2) probably much easier to learn, das model does not have to construct the board internally
+    6.3) Function to generate the states given a tile
+    6.4) adjust the nnet to single output state -> value
+"""
+import matplotlib.pyplot as plt
+from IPython import display
 import pygame
 from take_it_easy.constants import WIDTH, HEIGHT
-from take_it_easy.board import Board, ALL_NUMBERS
-from take_it_easy.agent import AgentEasy
-from take_it_easy.utils import transform_state
-FPS = 60
-import json
+from take_it_easy.board import Board
+from model.memory import SimpleReplayBuffer
+from model.thinker import Thinker, EasyNet
+from model.agent import AgentEasy
+
 
 WIN = pygame.display.set_mode((WIDTH, HEIGHT))
+FPS = 60
+
 pygame.display.set_caption("Take It Easy!")
 
 
 
-import matplotlib.pyplot as plt
-from IPython import display
 
 plt.ion()
 
@@ -47,13 +54,13 @@ def plot_progress(scores, mean_scores):
     display.clear_output(wait=True)
     display.display(plt.gcf())
     plt.clf()
-    plt.title('Training...')
+    plt.title('Current')
     plt.xlabel('Number of Games')
     plt.ylabel('Score')
-    #plt.plot(scores)
+    plt.plot(scores)
     plt.plot(mean_scores)
     plt.ylim(ymin=0)
-    #plt.text(len(scores)-1, scores[-1], str(scores[-1]))
+    plt.text(len(scores)-1, scores[-1], str(scores[-1]))
     plt.text(len(mean_scores)-1, mean_scores[-1], str(mean_scores[-1]))
     plt.show(block=False)
     plt.pause(.1)
@@ -64,7 +71,18 @@ def main():
     i = 0 
     clock = pygame.time.Clock()
     board = Board(WIN)
-    agent = AgentEasy()
+    
+    thinker = Thinker(
+            nnet_class = EasyNet
+            )
+    
+    memory = SimpleReplayBuffer(capacity=200000)
+    
+    agent = AgentEasy(
+        thinker=thinker,
+        memory = memory
+        )
+
     # agent.study_games('molt_plays.json')
     plot_scores = []
     plot_mean_scores = []
@@ -78,31 +96,21 @@ def main():
             if event.type == pygame.QUIT:
                 run = False
         if board.tiles_placed <= 19:
-            state_t = transform_state(board)
-            choice = agent.act(state_t, board, i)
-            score_t = board.smooth_value
-            board.action_by_id(choice[0])
-            state_t1 = transform_state(board)
-            score_t1 = board.smooth_value
-            reward = score_t1 - score_t
-            agent.chache(state_t, choice[1], state_t1, reward, board.finished)
-            agent.synch_nets()
-            if i > 20*19:
+            agent.act_and_observe_action(board)
+            if i > 21*19:
                 agent.learn()
-            # if i % 250 == 0:
-                
-            i = i+1
+            i += 1
         if board.tiles_placed == 19:
             plot_scores.append(board.calculated_score)
             mean_score = sum(plot_scores[-100:])/len(plot_scores[-100:])
             plot_mean_scores.append(mean_score)
-            if i % 10 == 0:
+            if i % 100 == 0:
                 plot_progress(plot_scores, plot_mean_scores)
             board.refresh()
-        #board.draw_board()
-        if i % 200 == 0:
-            agent.save_nnet()
-        #pygame.display.update()
+        board.draw_board()
+        if i % 20000 == 0:
+            agent.save_nnet()            
+        pygame.display.update()
     pygame.quit()
 
 if __name__ == "__main__":
