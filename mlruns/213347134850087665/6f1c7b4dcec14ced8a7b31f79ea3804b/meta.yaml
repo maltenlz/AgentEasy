@@ -1,0 +1,16 @@
+artifact_uri: file:///Users/maltenalenz/Documents/Projects/TakeItEasy/mlruns/213347134850087665/6f1c7b4dcec14ced8a7b31f79ea3804b/artifacts
+deleted_time: 1746100836922
+end_time: 1746029400476
+entry_point_name: ''
+experiment_id: '213347134850087665'
+lifecycle_stage: deleted
+run_id: 6f1c7b4dcec14ced8a7b31f79ea3804b
+run_name: bald-fowl-410
+run_uuid: 6f1c7b4dcec14ced8a7b31f79ea3804b
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1746029351999
+status: 3
+tags: []
+user_id: maltenalenz

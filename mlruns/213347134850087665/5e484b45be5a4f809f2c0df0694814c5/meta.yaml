@@ -1,0 +1,16 @@
+artifact_uri: file:///Users/maltenalenz/Documents/Projects/TakeItEasy/mlruns/213347134850087665/5e484b45be5a4f809f2c0df0694814c5/artifacts
+deleted_time: 1746100836950
+end_time: 1746027260990
+entry_point_name: ''
+experiment_id: '213347134850087665'
+lifecycle_stage: deleted
+run_id: 5e484b45be5a4f809f2c0df0694814c5
+run_name: nimble-ant-109
+run_uuid: 5e484b45be5a4f809f2c0df0694814c5
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1746027260665
+status: 4
+tags: []
+user_id: maltenalenz

@@ -1,0 +1,16 @@
+artifact_uri: file:///Users/maltenalenz/Documents/Projects/TakeItEasy/mlruns/213347134850087665/109cb7ec0a6b4c6ea43a332af29d723a/artifacts
+deleted_time: 1746100836979
+end_time: 1746027160777
+entry_point_name: ''
+experiment_id: '213347134850087665'
+lifecycle_stage: deleted
+run_id: 109cb7ec0a6b4c6ea43a332af29d723a
+run_name: serious-goose-553
+run_uuid: 109cb7ec0a6b4c6ea43a332af29d723a
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1746027160431
+status: 4
+tags: []
+user_id: maltenalenz

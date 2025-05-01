@@ -1,0 +1,16 @@
+artifact_uri: file:///Users/maltenalenz/Documents/Projects/TakeItEasy/mlruns/213347134850087665/3e0429912b19491681cdd558aa0a17de/artifacts
+deleted_time: 1746100836957
+end_time: 1746027201962
+entry_point_name: ''
+experiment_id: '213347134850087665'
+lifecycle_stage: deleted
+run_id: 3e0429912b19491681cdd558aa0a17de
+run_name: sedate-mule-581
+run_uuid: 3e0429912b19491681cdd558aa0a17de
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1746027201616
+status: 4
+tags: []
+user_id: maltenalenz

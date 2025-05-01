@@ -1,7 +1,7 @@
 """ 
 DDQN Agent that plays the game TakeItEasy.
 Currently uses Double Q Learning with soft updates and gradient clipping.
-Possible improvements:
+Possible improvements:ççç
 1) try different representations of the tiles, currently no way of checking is certain tiles can still come
 27 tiles. therefore 28 one-hoty-encoding for each field. -> harder to learn but much more potential ✘
 
@@ -38,13 +38,16 @@ from take_it_easy.board import Board
 from model.memory import SimpleReplayBuffer
 from model.thinker import Thinker, EasyNet
 from model.agent import AgentEasy
-from model.exploration import EpsilonGreedyStrategy, ExplorationConfig
+from model.exploration import EpsilonGreedyStrategy, BoltzmannExploration, ExplorationConfig
+from model.value_functions import smooth_score, actual_score
+import mlflow
 
 WIN = pygame.display.set_mode((WIDTH, HEIGHT))
 FPS = 60
 
 pygame.display.set_caption("Take It Easy!")
 
+mlflow.set_experiment("AgentEasy")
 
 
 
@@ -65,9 +68,19 @@ def plot_progress(scores, mean_scores):
     plt.show(block=False)
     plt.pause(.1)
 
+def check_if_converged(mean_scores, window=10, warmup_periods=100, tolerance=5):
+    #print(mean_scores)
+    if len(mean_scores) < warmup_periods:
+        return False  # Not enough data yet
+    #print('enough data')
+    recent_avg = sum(mean_scores[-window-1:-1]) / window
+    last_score = mean_scores[-1]
+
+    # If last score is not better than the recent average by at least `tolerance`
+    return (last_score - recent_avg) <= tolerance
 
 def main():
-    run = True
+    converged = False
     i = 0 
     clock = pygame.time.Clock()
     board = Board(WIN)
@@ -78,43 +91,62 @@ def main():
     
     memory = SimpleReplayBuffer(capacity=200000)
     
-    exploration_strategy = EpsilonGreedyStrategy(config = ExplorationConfig())
-
+    exploration_strategy = BoltzmannExploration(config = ExplorationConfig(tau0=0.5, tau_decay_rate=0.000003))
+    
+    exploration_strategy.plot()
+    
     agent = AgentEasy(
         thinker=thinker,
-        memory = memory,
-        exploration_strategy = exploration_strategy
+        memory=memory,
+        exploration_strategy=exploration_strategy,
+        value_function=actual_score
         )
 
-    # agent.study_games('molt_plays.json')
-    plot_scores = []
-    plot_mean_scores = []
-    while run:
-        clock.tick(FPS)
-        for event in pygame.event.get():
-            if event.type == pygame.MOUSEBUTTONUP:
-                board.action_by_mouse(event.pos)
-            if event.type == pygame.MOUSEBUTTONUP:
-                pass
-            if event.type == pygame.QUIT:
-                run = False
-        if board.tiles_placed <= 19:
-            agent.act_and_observe_action(board)
-            if i > 21*19:
-                agent.learn()
-            i += 1
-        if board.tiles_placed == 19:
-            plot_scores.append(board.calculated_score)
-            mean_score = sum(plot_scores[-100:])/len(plot_scores[-100:])
-            plot_mean_scores.append(mean_score)
-            if i % 100 == 0:
-                plot_progress(plot_scores, plot_mean_scores)
-            board.refresh()
-        board.draw_board()
-        if i % 20000 == 0:
-            agent.save_nnet()            
-        pygame.display.update()
-    pygame.quit()
+
+    game_scores = []
+    mean_scores = []
+    with mlflow.start_run():
+        mlflow.log_params(agent.thinker.learning_config.__dict__)
+        mlflow.log_params(agent.exploration_strategy.config.__dict__)
+        mlflow.log_param('Exploration Strategy', agent.exploration_strategy.strategy_name)
+        mlflow.log_param('Nnet Parameters', len([p for p in agent.thinker.policy_net.parameters()]))
+        while not converged:
+            clock.tick(FPS)
+            for event in pygame.event.get():
+                if event.type == pygame.MOUSEBUTTONUP:
+                    board.action_by_mouse(event.pos)
+                if event.type == pygame.MOUSEBUTTONUP:
+                    pass
+                if event.type == pygame.QUIT:
+                    converged = True
+            if board.tiles_placed <= 19:
+                agent.act_and_observe_action(board)
+                if i > 21*19:
+                    agent.learn()
+                i += 1
+            if board.tiles_placed == 19:
+                game_scores.append(board.calculated_score)
+                mean_score = sum(game_scores[-100:])/len(game_scores[-100:])
+                mean_scores.append(mean_score)
+                if i % 100 == 0:
+                    plot_progress(game_scores, mean_scores)
+                    mlflow.log_metric("score", mean_score, step=i)
+
+                board.refresh()
+                converged = check_if_converged(
+                    mean_scores,
+                    window=2000,
+                    warmup_periods=20000,
+                    tolerance=2.5
+                    )
+                
+            board.draw_board()
+            if i % 20000 == 0:
+                agent.save_nnet()            
+            pygame.display.update()
+        pygame.quit()
 
 if __name__ == "__main__":
     main()
+
+

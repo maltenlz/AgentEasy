@@ -27,7 +27,7 @@ class Memory(ABC):
         ''' returns a random sample of batch_size Experiences '''
 
 class SimpleReplayBuffer(Memory):
-    """ Sum Tree for Prioritized Experience Replay """
+    """ Simple Replay Buffer (Uniform Sampling) """
     def __init__(self, capacity):
         self.memory = deque(maxlen=capacity)
 
@@ -37,8 +37,9 @@ class SimpleReplayBuffer(Memory):
     def sample(self, batch_size):
         batch = random.sample(self.memory, batch_size)
         return batch
-
-
+    
+    def __len__(self):
+        return len(self.memory)
 class PrioritizedReplayMemory:
     """ Sum Tree for Prioritized Experience Replay """
     def __init__(self, capacity):

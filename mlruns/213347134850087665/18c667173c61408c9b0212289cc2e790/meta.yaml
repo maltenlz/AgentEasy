@@ -1,0 +1,16 @@
+artifact_uri: file:///Users/maltenalenz/Documents/Projects/TakeItEasy/mlruns/213347134850087665/18c667173c61408c9b0212289cc2e790/artifacts
+deleted_time: 1746100836931
+end_time: 1746028928888
+entry_point_name: ''
+experiment_id: '213347134850087665'
+lifecycle_stage: deleted
+run_id: 18c667173c61408c9b0212289cc2e790
+run_name: funny-gnu-567
+run_uuid: 18c667173c61408c9b0212289cc2e790
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1746028928472
+status: 4
+tags: []
+user_id: maltenalenz

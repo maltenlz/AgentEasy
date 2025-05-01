@@ -1,0 +1,16 @@
+artifact_uri: file:///Users/maltenalenz/Documents/Projects/TakeItEasy/mlruns/213347134850087665/1c35f16025024a6dada091748cd3a574/artifacts
+deleted_time: 1746100836931
+end_time: 1746027951000
+entry_point_name: ''
+experiment_id: '213347134850087665'
+lifecycle_stage: deleted
+run_id: 1c35f16025024a6dada091748cd3a574
+run_name: aged-quail-452
+run_uuid: 1c35f16025024a6dada091748cd3a574
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1746027395352
+status: 3
+tags: []
+user_id: maltenalenz

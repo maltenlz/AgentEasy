@@ -67,7 +67,7 @@ class Board:
 
     def refresh(self) -> None:
         self.tiles = [[Tile(*get_center_points(tile[0], tile[1], BOARD_HEIGHT)) for tile in row] for row in TILE_POSITIONS]
-        self.pieces_left = []
+        self.remaining_tiles = []
         self.calculated_score = 0
         self.selected_tile = None
         self.tiles_placed = -1

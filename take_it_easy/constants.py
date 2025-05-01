@@ -66,7 +66,8 @@ def right_diag(points):
     y2 = (points[2][1] + points[3][1])/2
     return (x1, y1), (x2, y2)
 
-DIRECTION_NUMBERS = {1: straight,
+DIRECTION_NUMBERS = {
+                     1: straight,
                      2: right_diag,
                      3: left_diag,
                      4: left_diag,
@@ -75,5 +76,4 @@ DIRECTION_NUMBERS = {1: straight,
                      7: right_diag,
                      8: left_diag,
                      9: straight
-}
-
+                    }

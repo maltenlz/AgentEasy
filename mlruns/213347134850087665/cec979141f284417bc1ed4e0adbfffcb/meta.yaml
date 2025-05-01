@@ -1,0 +1,16 @@
+artifact_uri: file:///Users/maltenalenz/Documents/Projects/TakeItEasy/mlruns/213347134850087665/cec979141f284417bc1ed4e0adbfffcb/artifacts
+deleted_time: 1746100836922
+end_time: 1746028969180
+entry_point_name: ''
+experiment_id: '213347134850087665'
+lifecycle_stage: deleted
+run_id: cec979141f284417bc1ed4e0adbfffcb
+run_name: gaudy-wolf-128
+run_uuid: cec979141f284417bc1ed4e0adbfffcb
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1746028946591
+status: 3
+tags: []
+user_id: maltenalenz

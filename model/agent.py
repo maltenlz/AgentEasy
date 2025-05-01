@@ -1,7 +1,7 @@
 from take_it_easy.board import Board
 import random
 from model.thinker import Thinker
-from take_it_easy.value_functions import actual_score
+from take_it_easy.value_functions import actual_score, score_line_smooth
 from model.memory import  Memory, Experience
 from model.exploration import EpsilonGreedyStrategy, ExplorationStrategy
 import math
@@ -10,17 +10,6 @@ import json
 import torch
 import itertools
 
-##### Only used if exploration strateguy is epsilon greedy
-EPS_START = 0.5
-EPS_END = 0.025
-EPS_DECAY = 150000
-MAX_MEMORY = 20000
-
-##### For Boltzman exploration
-TAU_MAX = 1
-#### decay_rate = -ln(0.01 / 1.0) / 300000  ≈ 0.0000154 expecting we are decent after 300k games
-DECAY_RATE = -math.log(0.01 / 1.0) / 1000000
-print(f'Boltzman decay rate: {DECAY_RATE}')
 
 def number_to_str(numbers: tuple[int]):
     return ''.join(str(n) for n in numbers)
@@ -31,42 +20,90 @@ TILE_MAPPING[number_to_str((0,0,0))] = 0
 print(TILE_MAPPING)
 
 class AgentEasy:
-    """ Agent that plays and learns the game."""
+    """ Agent that plays and learns the game.
+
+        Attributes: 
+            thinker (Thinker): the cognitive component of the agent, that can be trained and later on used to play.
+            replay_memory (Memory): memory to remember transitions between states, used for learning.
+            value_function: internal value function to rate the current boardstate. does not has to be the same as the overall game.
+            n_actions: counter that keeps track of how many actions where performed.
+    """
 
     def __init__(
             self,
             thinker: Thinker,
             memory: Memory,
-            exploration_strategy: ExplorationStrategy
+            exploration_strategy: ExplorationStrategy,
+            value_function = actual_score
             ):
         self.thinker = thinker
         self.replay_memory = memory
         self.exploration_strategy = exploration_strategy
-        self.value_function = actual_score
-        self.eps_start = 0.25
-        self.eps_end = 0.05
-        self.eps_decay = 50000
+        self.value_function = value_function
         self.n_actions = 0
 
     def translate_board(self, board: Board):
-        """ Returns the state of the board """
+        """ Returns the state of the board.
+
+        Creates the input array or features that serve as input to the neural net.
+        Features are:
+            * for each of the 19 tiles an array of length 28 with a 1 at the entry of tile that is present.
+              last element is 0 if no tile is placed yet.
+            * Dummy encoding for the tile currently at hand.
+            * information about which pieces are left to be placed.
+        
+            Args:
+                board (Board): boardstate
+            Returns:
+                list: one long list with bits containing the encoded boardstate.
+        """
         x_input = []
         for row in board.tiles:
             for tile in row:
-                x_input += one_hot_encode(tile)
-        x_input += one_hot_encode(board.current_tile)
+                x_input += self.one_hot_encode_tiles(tile)
+        x_input += self.one_hot_encode_tiles(board.current_tile)
+        x_input += self.binary_encode_pieces_left(board)
         return x_input
+
+    def one_hot_encode_tiles(self, tile):
+        ''' One hot encoding of a tile.'''
+        one_hot = [0]*(len(ALL_NUMBERS)+1)
+        idx = self.get_tile_idx(tile)
+        one_hot[idx] = 1
+        return one_hot
     
+    @staticmethod
+    def get_tile_idx(tile):
+        ''' Lookup for position in the mapping dictionary. '''
+        return TILE_MAPPING[number_to_str(tile.numbers)]
+    
+    def binary_encode_pieces_left(self, board: Board):
+        """ Encodes the information of remaining tiles (excluding current piece).
+        
+        Args:
+            board (Board): current boardstate
+        
+        Returns:
+            list: list of 27 bits, with 1 if piece is still available and 0 otherwise.        
+        """
+        idxs_left = [self.get_tile_idx(tile) for tile in board.remaining_tiles]
+        x_out = [1 if i in idxs_left else 0 for i in range(1, 28)]
+        return x_out
+
     def act_and_observe_action(
             self,
             board: Board
             ):
+        '''
+            Does 3 things: observe boardstate before acting, act and observe boardstate after.
+            The transition is saved as an Experience.
+        '''
         state_t = self.translate_board(board)
         score_t = self.value_function(board)
         predictions = self.thinker.predict(state_t)
         loc, predicted_action = self.exploration_strategy.choose_next_move(
                                                           predictions,
-                                                          board.get_open_moves()
+                                                          possible_moves = board.get_open_moves()
                                                           )
         board.action_by_id(loc)
         state_t1 = self.translate_board(board)
@@ -91,18 +128,5 @@ class AgentEasy:
 
 
 
-def softmax(q_values, tau=1.0):
-    exp_values = np.exp(np.array(q_values) / tau)  # Scale by temperature
-    probs = exp_values / np.sum(exp_values)
-    return probs
-
-def one_hot_encode(tile):
-    one_hot = [0]*(len(ALL_NUMBERS)+1)
-    idx = get_tile_idx(tile)
-    one_hot[idx] = 1
-    return one_hot
-
-def get_tile_idx(tile):
-    return TILE_MAPPING[number_to_str(tile.numbers)]
 
 

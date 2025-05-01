@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from dataclasses import dataclass
 from model.memory import Experience
 
-SIZE_SCALER = 4
+SIZE_SCALER = 8
 
 class EasyNet(nn.Module):
     """ DQN learning for Takeing It Easy!"""
@@ -14,7 +14,7 @@ class EasyNet(nn.Module):
     def __init__(self):
         super(EasyNet, self).__init__()
         # 19 tiles plus tile to be placed times 28 (all possible tiles plus no tile) one hot encoded remaining vector and remaining tiles
-        self.layer1 = nn.Linear(20*28, 4*128*SIZE_SCALER)
+        self.layer1 = nn.Linear(20*28 + 27, 4*128*SIZE_SCALER)
         self.layer2 = nn.Linear(4 * 128*SIZE_SCALER, 128*SIZE_SCALER)
         self.layer3 = nn.Linear(128*SIZE_SCALER, 19)
         self.to(device)
@@ -37,11 +37,11 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 @dataclass
 class ThinkerConfig:
     ''' contains the parameters for the learning phase '''
-    lr: float = 1e-3
-    gamma: float = 0.95
-    tau: float = 0.5
+    lr: float = 1e-5
+    gamma: float = 0.99
+    tau: float = 0.05
     batch_size: int = 128
-    nsteps_target_update: int = 50
+    nsteps_target_update: int = 5
 
 class Thinker:
     """ 
@@ -57,7 +57,7 @@ class Thinker:
         self.target_net = nnet_class()
         self.policy_net = nnet_class()
         self.optimizer = optimizer(self.policy_net.parameters(), lr=learning_config.lr)
-        self.criterion = nn.SmoothL1Loss()
+        self.criterion = nn.MSELoss()
         self.learning_steps = 0
 
     def learn_from_experience(
