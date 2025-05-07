@@ -5,18 +5,17 @@ import torch.optim as optim
 import torch.nn.functional as F
 from dataclasses import dataclass
 from model.memory import Experience
-
-SIZE_SCALER = 8
+from torchview import draw_graph
 
 class EasyNet(nn.Module):
     """ DQN learning for Takeing It Easy!"""
 
-    def __init__(self):
+    def __init__(self, size_scaler):
         super(EasyNet, self).__init__()
         # 19 tiles plus tile to be placed times 28 (all possible tiles plus no tile) one hot encoded remaining vector and remaining tiles
-        self.layer1 = nn.Linear(20*28 + 27, 4*128*SIZE_SCALER)
-        self.layer2 = nn.Linear(4 * 128*SIZE_SCALER, 128*SIZE_SCALER)
-        self.layer3 = nn.Linear(128*SIZE_SCALER, 19)
+        self.layer1 = nn.Linear(20*28 + 27, 128*size_scaler)
+        self.layer2 = nn.Linear(128*size_scaler, 128*size_scaler)
+        self.layer3 = nn.Linear(128*size_scaler, 19)
         self.to(device)
 
     def forward(self, x):
@@ -31,17 +30,23 @@ class EasyNet(nn.Module):
     
     def save(self):
         torch.save(self, 'model_checkpoint.pth')
+    
+    def plot_nnet(self):
+        input_size = (1, 20*28 + 27)  # batch size 1
+        model_graph = draw_graph(self, input_size=input_size, graph_name='EasyNet', save_graph=True)
+        model_graph.visual_graph.render("nnet_architecture", format="png")
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 @dataclass
-class ThinkerConfig:
+class LearningConfig:
     ''' contains the parameters for the learning phase '''
     lr: float = 1e-5
     gamma: float = 0.99
     tau: float = 0.05
     batch_size: int = 128
     nsteps_target_update: int = 5
+    size_scaler: int = 4
 
 class Thinker:
     """ 
@@ -51,11 +56,11 @@ class Thinker:
                  self,
                  nnet_class: type[nn.Module],
                  optimizer: optim.Optimizer = optim.Adam,
-                 learning_config: ThinkerConfig = ThinkerConfig()
+                 learning_config: LearningConfig = LearningConfig()
                  ):
         self.learning_config = learning_config
-        self.target_net = nnet_class()
-        self.policy_net = nnet_class()
+        self.target_net = nnet_class(learning_config.size_scaler)
+        self.policy_net = nnet_class(learning_config.size_scaler)
         self.optimizer = optimizer(self.policy_net.parameters(), lr=learning_config.lr)
         self.criterion = nn.MSELoss()
         self.learning_steps = 0
@@ -67,9 +72,10 @@ class Thinker:
         """
             Takes a Learning Step, based on the provided memory Sample
         """
-        learning_batch = replay_memory.sample(self.learning_config.batch_size)
+        idxs, weights, learning_batch = replay_memory.sample(self.learning_config.batch_size)
         state, next_state, action, reward, done, legal_moves = self._experiences_to_tensors(learning_batch)
-        
+        weights = torch.tensor(weights, dtype=torch.float32, device=state.device)
+
         pred = self.policy_net(state)
         predicted_next_values = self.policy_net(next_state)
 
@@ -79,26 +85,31 @@ class Thinker:
 
         # from the legal moves see which will maximise the expected rewards
         next_actions = torch.argmax(masked_q_values, dim=1)
-        future_Q_values = self.target_net(next_state).gather(1, next_actions.unsqueeze(1)).squeeze(1)
+        future_q_values = self.target_net(next_state).gather(1, next_actions.unsqueeze(1)).squeeze(1)
 
         # doesnt add future reward if it was the last move
         not_done_mask = torch.logical_not(done)  
-        Q_new = reward + self.learning_config.gamma * future_Q_values * not_done_mask
+        q_new = reward + self.learning_config.gamma * future_q_values * not_done_mask
 
         # Calculate TD errors with IS weights
         td_target =  pred[torch.arange(len(action)), action]
-
-        # Calculate gradient-weighted loss 
-        loss = self.criterion(td_target, Q_new.detach())
+        elementwise_loss = self.criterion(td_target, q_new.detach())
+        loss = (weights * elementwise_loss).mean()
 
         self.optimizer.zero_grad()
         loss.backward()
         nn.utils.clip_grad_value_(self.policy_net.parameters(), clip_value = 3)
         self.optimizer.step()
         self.learning_steps += 1
+
+        if replay_memory.memory_type == 'PER':
+            td_errors = (q_new - td_target).detach().cpu().numpy()
+            for idx, error in zip(idxs, td_errors):
+                replay_memory.update(idx, error)
+
         if self.learning_steps % self.learning_config.nsteps_target_update == 0:
             self._update_target_network()
-    
+
     def predict(self, state):
         ''' returns predicted reward for all 19 Tiles (containing illegal moves) based on the current state.'''
         return self.policy_net.predict_value(state)

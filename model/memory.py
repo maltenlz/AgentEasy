@@ -3,7 +3,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 from collections import deque
 import random
-
+from typing import Optional
 @dataclass
 class Experience:
     ''' 
@@ -23,8 +23,16 @@ class Memory(ABC):
         ''' commits a new Experience to memory'''
         
     @abstractmethod
-    def sample(self, batch_size: int) -> list[Experience]:
-        ''' returns a random sample of batch_size Experiences '''
+    def sample(self, batch_size: int) -> tuple[Optional[list[int]], list[float], list[Experience]]:
+        ''' Sample from the Replay buffer
+        Args: 
+            int: batch size
+        Returns:
+            tuple conising of
+            Optional[list]: list of indices in buffer, used in REP
+            Optional[list]: list of priority values
+            list: the Experiences sampled to be learned from
+        '''
 
 class SimpleReplayBuffer(Memory):
     """ Simple Replay Buffer (Uniform Sampling) """
@@ -36,102 +44,105 @@ class SimpleReplayBuffer(Memory):
 
     def sample(self, batch_size):
         batch = random.sample(self.memory, batch_size)
-        return batch
+        priority = [1]*batch_size
+        return None, priority, batch
     
     def __len__(self):
         return len(self.memory)
-class PrioritizedReplayMemory:
-    """ Sum Tree for Prioritized Experience Replay """
+    
+    @property
+    def memory_type(self):
+        return 'Simple Random Buffer'
+class PERBuffer:
+    def __init__(self, capacity, alpha=0.6):
+        self.tree = SumTree(capacity)
+        self.alpha = alpha
+        self.epsilon = 1e-5  # to avoid zero priority
+
+    def add(self, sample):
+        # set piority to max
+        max_p = np.max(self.tree.tree[-self.tree.capacity:])
+        if max_p == 0:
+            max_p = 1.0
+        p = max_p
+        self.tree.add(p, sample)
+
+    def sample(self, n, beta=0.4):
+        batch = []
+        idxs = []
+        priorities = []
+        segment = self.tree.total / n
+
+        for i in range(n):
+            s = random.uniform(segment * i, segment * (i + 1))
+            idx, p, data = self.tree.get(s)
+            batch.append(data)
+            idxs.append(idx)
+            priorities.append(p)
+
+        total = self.tree.total
+        probs = np.array(priorities) / total
+        weights = (self.tree.size * probs) ** (-beta)
+        weights = weights * (n / weights.sum())
+        return idxs, weights, batch
+
+    def update(self, idx, error):
+        p = (np.abs(error) + self.epsilon) ** self.alpha
+        self.tree.update(idx, p)
+    
+    @property
+    def memory_type(self):
+        return 'PER'    
+
+class SumTree:
     def __init__(self, capacity):
-        self.capacity = capacity 
-        self.tree = np.zeros(2 * capacity - 1)  # Tree nodes (double the capacity) 
-        self.data = np.zeros(capacity, dtype=object)  # Store experiences
-        self.write_index = 0  # Track where to write next experience
-        self.max_entries = capacity - 1  # Max number of entries
-        self.max_priority = 1.0  # Max priority
-        self.beta_0 = 0.4  # Importance sampling exponent
-        self.beta = self.beta_0  
-        self.max_it = 1600000  # Max iterations
-        self.iteration = 0
+        self.capacity = capacity
+        self.tree = np.zeros(2 * capacity - 1)
+        self.data = np.zeros(capacity, dtype=object)
+        self.size = 0
+        self.write = 0
+
+    def add(self, priority, data):
+        assert priority >= 0, 'Trying to add experience with negative priority.'
+        idx = self.write + self.capacity - 1
+        self.data[self.write] = data
+        self.update(idx, priority)
+        
+        self.write += 1
+        if self.write >= self.capacity:
+            self.write = 0
+        self.size = min(self.size + 1, self.capacity)
+
+    def update(self, idx, priority):
+        assert priority >= 0, 'Trying to update priority to negative value.'
+        change = priority - self.tree[idx]
+        self.tree[idx] = priority
+        self._propagate(idx, change)
 
     def _propagate(self, idx, change):
-        parent = (idx - 1) // 2  # Calculate parent index
+        parent = (idx - 1) // 2
         self.tree[parent] += change
         if parent != 0:
             self._propagate(parent, change)
 
+    def get(self, s):
+        idx = self._retrieve(0, s)
+        data_idx = idx - self.capacity + 1
+        return (idx, self.tree[idx], self.data[data_idx])
+
     def _retrieve(self, idx, s):
-        left = 2 * idx + 1  # Left child index
-        right = left + 1  # Right child index
-
-        if left >= len(self.tree):  # Reached leaf node
+        left = 2 * idx + 1
+        right = left + 1
+        if left >= len(self.tree):
             return idx
-
         if s <= self.tree[left]:
             return self._retrieve(left, s)
         else:
             return self._retrieve(right, s - self.tree[left])
 
+    @property
     def total(self):
-        return self.tree[0]  # Total priority stored in the root node
+        return self.tree[0]
 
-    def add(self, data):
-        idx = self.write_index + self.max_entries
 
-        self.data[self.write_index] = data  # Store data 
-        self.update(idx, self.max_priority)  # For newly added use the max priority
 
-        self.write_index += 1
-        if self.write_index >= self.capacity:  # Reset write index 
-            self.write_index = 0
-
-    def update_batch(self, idxs, priorities):
-        ### Update after learning step ###
-        for idx, p in zip(idxs, priorities):
-            self.update(idx, p)
-        ### also update the max priority ###
-        new_max = max(priorities)
-        self.max_priority = max(new_max, self.max_priority)
-
-        ### and the beta value ###
-        self.iteration += 1
-        beta = self.beta_0 + (1 - self.beta_0) * (self.iteration / self.max_it)
-        self.beta =  beta
-
-    def update(self, idx, p):
-        change = p - self.tree[idx]
-        self.tree[idx] = p
-        self._propagate(idx, change)  # Update values to root
-
-    def get(self, s):
-        idx = self._retrieve(0, s)
-        data_idx = idx - self.max_entries
-        return idx, self.tree[idx], self.data[data_idx]
-    
-    def sample(self, batch_size):
-        """ Sample from this sumtree """
-        batch_idx = []
-        batch_priorities = []
-        segment = self.total() / batch_size  
-        data_ls = []
-
-        for i in range(batch_size):
-            a = segment * i
-            b = segment * (i + 1)
-
-            s = np.random.uniform(a, b)
-
-            idx, p, data = self.get(s)
-            batch_idx.append(idx)
-            batch_priorities.append(p)
-            data_ls.append(data)
-        return batch_idx, batch_priorities, data_ls
-
-    def get_is_weights(self, idxs):
-        # Sample probabilities are stored as priorities in the SumTree
-        probabilities = [self.get(idx)[1] for idx in idxs] 
-        N = len(self.data)  # Replay buffer size
-        max_weight = (N * min(probabilities) + 0.0001) ** (-self.beta) 
-
-        weights = [(N * p + 0.0001) ** (-self.beta) / max_weight for p in probabilities]  
-        return weights 

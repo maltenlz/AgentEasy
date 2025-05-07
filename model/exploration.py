@@ -6,8 +6,17 @@ import numpy as np
 import random
 import matplotlib.pyplot as plt
 
+
+def increment_steps(method):
+    ''' Utility function to increase step counter for the ExplorationStrategy Class'''
+    def wrapper(self, *args, **kwargs):
+        result = method(self, *args, **kwargs)
+        self.n_steps += 1
+        return result
+    return wrapper
 @dataclass
 class ExplorationConfig:
+    ''' Container class to store the hyperparameters '''
     eps_start: Optional[float] = 0.5
     eps_end: Optional[float] = 0.05
     eps_decay: Optional[float] = 150000
@@ -17,7 +26,9 @@ class ExplorationConfig:
 class ExplorationStrategy(ABC):
     ''' 
     Interface for Exploration strategies.
-    Idea of this class is to automate bookkeeping, such as taking track of steps and provide an easy interface of choosing the next move.    
+
+    Requires method for plotting the Exploration schedule implied by the hyperparameters,
+    as well as method for choosing the next move.  
     '''
     def __init__(
             self, 
@@ -37,17 +48,24 @@ class ExplorationStrategy(ABC):
     @abstractmethod
     def plot(self):
         ''' Plot to be called before training to see implied exploration curve given the parameters. '''
-
-def increment_steps(method):
-    ''' utility function to increase step counter for the ExplorationStrategy Class'''
-    def wrapper(self, *args, **kwargs):
-        result = method(self, *args, **kwargs)
-        self.n_steps += 1
-        return result
-    return wrapper
+    
+    @property
+    @abstractmethod
+    def strategy_name(self):
+        ''' Also require property: strategy name, to be saved in MLflow and also used in the train loop '''
 
 class EpsilonGreedyStrategy(ExplorationStrategy):
-    ''' Implementation of Epsilon Greedy Move '''
+    ''' 
+    Implementation of Epsilon Greedy Exploration 
+
+    Makes a move at random with p = eps_threshold and takes the move with the highest predicted Q-value with p = 1-eps_threshold.
+    '''
+    def __init__(self, config):
+        super().__init__(config)
+        assert config.eps_decay, 'Provide eps_decay in EpsilonGreedyStrategy.'
+        assert config.eps_start, 'Provide eps_start in EpsilonGreedyStrategy.'
+        assert config.eps_end, 'Provide eps_end in EpsilonGreedyStrategy.'
+
     @property
     def eps_threshold(self):
         ''' Calculates the chance of taking a random move at a given time '''
@@ -76,10 +94,11 @@ class EpsilonGreedyStrategy(ExplorationStrategy):
             else:
                 rand_move = random.choice(possible_moves)
                 return rand_move
-    
+        return None
+
     def plot(self):
-        ''' Plot the epsilon decay curve over time '''
-        steps = range(self.config.eps_decay * 5)  # Arbitrary range long enough to see decay
+        ''' Plot the epsilon decay schedule over steps taken '''
+        steps = range(self.config.eps_decay * 5)
         epsilons = [
             self.config.eps_end + (self.config.eps_start - self.config.eps_end) * math.exp(-1. * step / self.config.eps_decay)
             for step in steps
@@ -95,6 +114,13 @@ class EpsilonGreedyStrategy(ExplorationStrategy):
 
 class BoltzmannExploration(ExplorationStrategy):
     ''' Implementation of Epsilon Greedy Move '''
+
+    def __init__(self, config):
+        super().__init__(config)
+        assert config.tau0, 'Provide tau0 in BoltzmannExploration.'
+        assert config.taumin, 'Provide taumin in BoltzmannExploration.'
+        assert config.tau_decay_rate, 'Provide tau_decay_rate in BoltzmannExploration.'
+
     @property
     def tau(self):
         ''' temperature parameter for boltzmann exploration depending on time. 1 means spread out and smaller will peak at the best choice '''

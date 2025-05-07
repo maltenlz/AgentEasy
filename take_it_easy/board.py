@@ -36,16 +36,17 @@ def get_center_points(i, j, height):
 
 class Board:
     """ Implements the game logic and drawing of the board """
-    def __init__(self, win) -> None:
+    def __init__(self, win: pygame.display) -> None:
         self.win = win
         self.refresh()
+        self.finished = False
 
     def _create_pool(self) -> None:
         ### POSITIONS of the remaining tiles
         REMAINING_POSIONS = ([(6,i) for i in range(6)] +
                              [(7,i) for i in range(6)] +
-                             [(8,i) for i in range(6)] + 
-                             [(9,i) for i in range(6)] + 
+                             [(8,i) for i in range(6)] +
+                             [(9,i) for i in range(6)] +
                              [(10,i) for i in range(6)])
         self.remaining_tiles = []
         self.open_numbers = ALL_NUMBERS

@@ -34,7 +34,9 @@ def calc_hexagon_points(center_x,center_y, apothem, scale):
 ### class that represents a tile, implements drawing and click handling
 
 class Tile:
-    def __init__(self, center_x, center_y, numbers: list = [0,0,0]) -> None:
+    def __init__(self, center_x, center_y, numbers: list = None) -> None:
+        if numbers is None:
+            numbers = [0,0,0]
         self.numbers = numbers
         self.points = calc_hexagon_points(center_x, center_y, APOTHEM, 0.97)
         self.points_boarder = calc_hexagon_points(center_x, center_y, APOTHEM, 1)

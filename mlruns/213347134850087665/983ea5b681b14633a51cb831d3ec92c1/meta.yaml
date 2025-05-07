@@ -1,8 +1,9 @@
 artifact_uri: file:///Users/maltenalenz/Documents/Projects/TakeItEasy/mlruns/213347134850087665/983ea5b681b14633a51cb831d3ec92c1/artifacts
+deleted_time: 1746616114697
 end_time: 1746049949719
 entry_point_name: ''
 experiment_id: '213347134850087665'
-lifecycle_stage: active
+lifecycle_stage: deleted
 run_id: 983ea5b681b14633a51cb831d3ec92c1
 run_name: melodic-stag-4
 run_uuid: 983ea5b681b14633a51cb831d3ec92c1
