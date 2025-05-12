@@ -3,3 +3,4 @@ __pycache__/
 mlruns/
 nnet_architecture*
 EasyNet*
+model_checkpoint.pth
