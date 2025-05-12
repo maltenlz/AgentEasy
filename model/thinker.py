@@ -10,10 +10,10 @@ from torchview import draw_graph
 class EasyNet(nn.Module):
     """ DQN learning for Takeing It Easy!"""
 
-    def __init__(self, size_scaler):
+    def __init__(self, size_scaler, input_dim):
         super(EasyNet, self).__init__()
-        # 19 tiles plus tile to be placed times 28 (all possible tiles plus no tile) one hot encoded remaining vector and remaining tiles
-        self.layer1 = nn.Linear(20*28 + 27, 128*size_scaler)
+        self.input_dim = input_dim
+        self.layer1 = nn.Linear(input_dim, 128*size_scaler)
         self.layer2 = nn.Linear(128*size_scaler, 128*size_scaler)
         self.layer3 = nn.Linear(128*size_scaler, 19)
         self.to(device)
@@ -32,7 +32,7 @@ class EasyNet(nn.Module):
         torch.save(self, 'model_checkpoint.pth')
     
     def plot_nnet(self):
-        input_size = (1, 20*28 + 27)  # batch size 1
+        input_size = (1, self.input_dim)  # batch size 1
         model_graph = draw_graph(self, input_size=input_size, graph_name='EasyNet', save_graph=True)
         model_graph.visual_graph.render("nnet_architecture", format="png")
 
@@ -47,6 +47,7 @@ class LearningConfig:
     batch_size: int = 128
     nsteps_target_update: int = 5
     size_scaler: int = 4
+    weight_decay: float = 1e-4
 
 class Thinker:
     """ 
@@ -54,16 +55,19 @@ class Thinker:
     """
     def __init__(
                  self,
-                 nnet_class: type[nn.Module],
-                 optimizer: optim.Optimizer = optim.Adam,
                  learning_config: LearningConfig = LearningConfig()
                  ):
         self.learning_config = learning_config
-        self.target_net = nnet_class(learning_config.size_scaler)
-        self.policy_net = nnet_class(learning_config.size_scaler)
-        self.optimizer = optimizer(self.policy_net.parameters(), lr=learning_config.lr)
+        self.target_net = None
+        self.policy_net = None
+        self.optimizer = None
         self.criterion = nn.MSELoss()
         self.learning_steps = 0
+    
+    def initialize_nnets(self, input_dims):
+        self.target_net = EasyNet(size_scaler=LearningConfig.size_scaler, input_dim=input_dims)
+        self.policy_net = EasyNet(size_scaler=LearningConfig.size_scaler, input_dim=input_dims)
+        self.optimizer = optim.AdamW(params=self.policy_net.parameters(), lr=self.learning_config.lr, weight_decay=self.learning_config.weight_decay)
 
     def learn_from_experience(
             self,

@@ -5,6 +5,21 @@ import random
 from take_it_easy.constants import WHITE, BLACK, WIDTH, HEIGHT, BOARD_HEIGHT, TILE_BACKGROUND
 from take_it_easy.tile import Tile
 from take_it_easy.value_functions import actual_score, score_line, score_line_smooth
+
+import itertools
+
+
+def number_to_str(numbers: tuple[int]):
+    return ''.join(str(n) for n in numbers)
+
+def get_tile_idx(tile):
+        ''' Lookup for position in the mapping dictionary. '''
+        return TILE_TO_IDX[number_to_str(tile.numbers)]
+
+ALL_NUMBERS = list(itertools.product([1,5,9], [3,4,8], [2,6,7]))
+TILE_TO_IDX = {number_to_str(n): i for i, n in enumerate(ALL_NUMBERS)}
+IDX_TO_TILE = {i: number_to_str(n) for i, n in enumerate(ALL_NUMBERS)}
+
 pygame.font.init()
 
 ### Lookup tables to get the ordering correct
@@ -153,3 +168,22 @@ class Board:
         text_render = font.render(f"SCORE: {self.calculated_score}", True, BLACK)
         text_rect = text_render.get_rect(center=(BOARD_HEIGHT // 2 + 80, BOARD_HEIGHT // 2 + 80))
         self.win.blit(text_render, text_rect)
+    
+    def numeric_board_state(self):
+        ''' 
+        returns an array that fully describes the board state
+        for each of the 27 tiles,
+        -1 if not yet placed
+        -2 if the tile to be placed
+        and 
+        otherwise the index of the spot on the board.
+        will be used by the BoardRepresentation.
+        '''
+        out = [-1]*27
+        flattened_tiles = [item for sublist in self.tiles for item in sublist]
+        for j, tile in enumerate(flattened_tiles):
+            if tile.numbers == [0,0,0]:
+                continue
+            out[get_tile_idx(tile)] = j
+        out[get_tile_idx(self.current_tile)] = -2
+        return out

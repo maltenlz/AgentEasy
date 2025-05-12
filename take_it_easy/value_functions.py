@@ -1,5 +1,5 @@
 from take_it_easy.constants import STRAIGHT_LINES, DIAGS_LEFT, DIAGS_RIGHT
-DISOUNT_FACTOR = 1
+DISOUNT_FACTOR = 0.2
 
 ### utility functions to calcualte points at the end of the game
 def score_straight(board, scoring_func):
@@ -26,8 +26,7 @@ def score_line_smooth(numbers:list):
         if numbers_placed == line_length:
             return sum(non_zeroes)
         else:
-            # small reward to continue lines
-            # actually should become larger the longer the line is
+            # also reward continuing lines
             return sum(non_zeroes) * numbers_placed/line_length * DISOUNT_FACTOR
     return 0
 

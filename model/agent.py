@@ -4,6 +4,7 @@ from model.thinker import Thinker
 from take_it_easy.value_functions import actual_score, score_line_smooth
 from model.memory import  Memory, Experience
 from model.exploration import EpsilonGreedyStrategy, ExplorationStrategy
+from model.board_representation import BoardEncoder
 import math
 import numpy as np
 import json
@@ -34,11 +35,13 @@ class AgentEasy:
             thinker: Thinker,
             memory: Memory,
             exploration_strategy: ExplorationStrategy,
+            board_encoder: BoardEncoder,
             value_function = actual_score
             ):
         self.thinker = thinker
         self.replay_memory = memory
         self.exploration_strategy = exploration_strategy
+        self.board_encoder = board_encoder
         self.value_function = value_function
         self.n_actions = 0
 
@@ -98,7 +101,8 @@ class AgentEasy:
             Does 3 things: observe boardstate before acting, act and observe boardstate after.
             The transition is saved as an Experience.
         '''
-        state_t = self.translate_board(board)
+        board_state = board.numeric_board_state()
+        state_t = self.board_encoder.extract_features(board_state)
         score_t = self.value_function(board)
         predictions = self.thinker.predict(state_t)
         loc, predicted_action = self.exploration_strategy.choose_next_move(
@@ -106,7 +110,8 @@ class AgentEasy:
                                                           possible_moves = board.get_open_moves()
                                                           )
         board.action_by_id(loc)
-        state_t1 = self.translate_board(board)
+        board_state = board.numeric_board_state()
+        state_t1 = self.board_encoder.extract_features(board_state)
         score_t1 = self.value_function(board)
         reward = score_t1 - score_t
         legal_moves = board.get_open_moves()

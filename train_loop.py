@@ -8,6 +8,7 @@ from model.thinker import Thinker, EasyNet, LearningConfig
 from model.agent import AgentEasy
 from model.exploration import EpsilonGreedyStrategy, BoltzmannExploration, ExplorationConfig
 from model.value_functions import smooth_score, actual_score
+from model.board_representation import SimpleOneHotEncoder, ColorPlusTileEncoder
 import mlflow
 import subprocess
 import numpy as np
@@ -54,23 +55,26 @@ def check_if_converged(moving_avgs, window=10, warmup_periods=100, tolerance=5):
 
 if __name__ == "__main__":
 
+    # board encoder 
+    board_encoder = ColorPlusTileEncoder()
 
     # Also intialize the Agent
     thinker = Thinker(
-        nnet_class = EasyNet,
-        learning_config=LearningConfig(lr = 0.00001, nsteps_target_update=1, tau=0.01, batch_size=128)
+        learning_config=LearningConfig(lr = 0.00001, nsteps_target_update=1, tau=0.01, batch_size=128, size_scaler=16)
         )
+    thinker.initialize_nnets(board_encoder.get_input_shape())
     thinker.target_net.plot_nnet()
-    memory = PERBuffer(capacity=2000000)
-    exploration_strategy = EpsilonGreedyStrategy(config = ExplorationConfig(eps_start=1, eps_end=1, eps_decay=400000))
+    memory = PERBuffer(capacity=2_000_000)
+    exploration_strategy = BoltzmannExploration(config = ExplorationConfig(tau0=0.7, taumin=0.01, tau_decay_rate=0.0000025))
     exploration_strategy.plot()
     agent = AgentEasy(
     thinker=thinker,
     memory=memory,
     exploration_strategy=exploration_strategy,
+    board_encoder=board_encoder,
     value_function=actual_score
     )
-
+    print(agent.board_encoder.get_input_shape())
     # Initialize the train loop
     game_scores = []
     mean_scores = []
@@ -84,6 +88,7 @@ if __name__ == "__main__":
         mlflow.log_params(agent.exploration_strategy.config.__dict__)
         mlflow.log_param('Exploration Strategy', agent.exploration_strategy.strategy_name)
         mlflow.log_param('Memory Type', agent.replay_memory.memory_type)
+        mlflow.log_param('Board Representation', agent.board_encoder.__class__.__name__)
 
         mlflow.log_param('Nnet Parameters', len([p for p in agent.thinker.policy_net.parameters()]))
         mlflow.log_artifact("nnet_architecture.png")
