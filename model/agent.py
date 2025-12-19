@@ -1,16 +1,16 @@
 from take_it_easy.board import Board
 import random
-from model.thinker import Thinker
+from model.thinker import DoubleQLearning
 from take_it_easy.value_functions import actual_score, score_line_smooth
-from model.memory import  Memory, Experience
-from model.exploration import EpsilonGreedyStrategy, ExplorationStrategy
+from model.memory import  IMemory, Experience
+from model.exploration import EpsilonGreedyStrategy, IExplorationStrategy
 from model.board_representation import BoardEncoder
 import math
 import numpy as np
 import json
 import torch
 import itertools
-
+from typing import Tuple, List, Protocol
 
 def number_to_str(numbers: tuple[int]):
     return ''.join(str(n) for n in numbers)
@@ -20,7 +20,12 @@ TILE_MAPPING = {number_to_str(n): i+1 for i, n in enumerate(ALL_NUMBERS)}
 TILE_MAPPING[number_to_str((0,0,0))] = 0
 print(TILE_MAPPING)
 
-class AgentEasy:
+class IRLAgent(Protocol):
+    def act(self, board: Board):
+        ...
+    def learn(self):
+        ...
+class AgentEasy(IRLAgent):
     """ Agent that plays and learns the game.
 
         Attributes: 
@@ -32,103 +37,84 @@ class AgentEasy:
 
     def __init__(
             self,
-            thinker: Thinker,
-            memory: Memory,
-            exploration_strategy: ExplorationStrategy,
+            learner: DoubleQLearning,
+            memory: IMemory,
+            exploration_strategy: IExplorationStrategy,
             board_encoder: BoardEncoder,
-            value_function = actual_score
             ):
-        self.thinker = thinker
+        self.learner = learner
         self.replay_memory = memory
         self.exploration_strategy = exploration_strategy
         self.board_encoder = board_encoder
-        self.value_function = value_function
         self.n_actions = 0
-
-    def translate_board(self, board: Board):
-        """ Returns the state of the board.
-
-        Creates the input array or features that serve as input to the neural net.
-        Features are:
-            * for each of the 19 tiles an array of length 28 with a 1 at the entry of tile that is present.
-              last element is 0 if no tile is placed yet.
-            * Dummy encoding for the tile currently at hand.
-            * information about which pieces are left to be placed.
-        
-            Args:
-                board (Board): boardstate
-            Returns:
-                list: one long list with bits containing the encoded boardstate.
-        """
-        x_input = []
-        for row in board.tiles:
-            for tile in row:
-                x_input += self.one_hot_encode_tiles(tile)
-        x_input += self.one_hot_encode_tiles(board.current_tile)
-        x_input += self.binary_encode_pieces_left(board)
-        return x_input
-
-    def one_hot_encode_tiles(self, tile):
-        ''' One hot encoding of a tile.'''
-        one_hot = [0]*(len(ALL_NUMBERS)+1)
-        idx = self.get_tile_idx(tile)
-        one_hot[idx] = 1
-        return one_hot
-    
-    @staticmethod
-    def get_tile_idx(tile):
-        ''' Lookup for position in the mapping dictionary. '''
-        return TILE_MAPPING[number_to_str(tile.numbers)]
-    
-    def binary_encode_pieces_left(self, board: Board):
-        """ Encodes the information of remaining tiles (excluding current piece).
-        
-        Args:
-            board (Board): current boardstate
-        
-        Returns:
-            list: list of 27 bits, with 1 if piece is still available and 0 otherwise.        
-        """
-        idxs_left = [self.get_tile_idx(tile) for tile in board.remaining_tiles]
-        x_out = [1 if i in idxs_left else 0 for i in range(1, 28)]
-        return x_out
 
     def act_and_observe_action(
             self,
-            board: Board
+            board: Board,
+            greedy_action: bool = True
             ):
         '''
             Does 3 things: observe boardstate before acting, act and observe boardstate after.
             The transition is saved as an Experience.
         '''
-        board_state = board.numeric_board_state()
-        state_t = self.board_encoder.extract_features(board_state)
-        score_t = self.value_function(board)
-        predictions = self.thinker.predict(state_t)
-        loc, predicted_action = self.exploration_strategy.choose_next_move(
-                                                          predictions,
-                                                          possible_moves = board.get_open_moves()
-                                                          )
-        board.action_by_id(loc)
-        board_state = board.numeric_board_state()
-        state_t1 = self.board_encoder.extract_features(board_state)
-        score_t1 = self.value_function(board)
+        state_t, score_t, legal_moves_t, _ = self._observe_state(board)
+        if greedy_action:
+            action = self._act_greedily(board, state_t, legal_moves_t)
+        else:
+            action = self._act(board, state_t, legal_moves_t)
+        state_t1, score_t1, legal_moves_t1, finished = self._observe_state(board)
+
+        # ------------ Commit the Episode to Memory -------------- # 
         reward = score_t1 - score_t
-        legal_moves = board.get_open_moves()
-        idx_legal_move = [d[1] for d in legal_moves]
-        legal_moves_mask = [1 if i in idx_legal_move else 0 for i in range(0, 19)]
-        new_experience = Experience(state_t, state_t1, predicted_action, reward, board.finished, legal_moves_mask)
-        self.replay_memory.add(new_experience)
+        legal_moves_mask = [1 if i in legal_moves_t1 else 0 for i in range(0, 19)]
+        if not greedy_action:
+            new_experience = Experience(
+                state_t=torch.tensor(state_t, dtype=torch.float32),
+                state_t1=torch.tensor(state_t1, dtype=torch.float32),
+                action=torch.tensor(action, dtype=torch.int64),
+                reward=torch.tensor(reward, dtype=torch.float32),
+                finished=torch.tensor(finished, dtype=torch.bool),
+                legal_moves=torch.tensor(legal_moves_mask, dtype=torch.long)
+            )
+            self.replay_memory.add(new_experience)
         self.n_actions += 1
-
-    def load_nnet(self):
-        self.thinker.policy_net = torch.load('model_checkpoint.pth')
-
+    
     def learn(self):
-        self.thinker.learn_from_experience(self.replay_memory)
+        self.learner.learn_from_experience(self.replay_memory)
+
+    def _act_greedily(self, board, state, legal_moves) -> int:
+        predictions = self.learner.predict(state)
+        action = max(legal_moves, key=lambda idx: predictions[idx])
+        board.action_by_id(action)
+        return action
+    
+    def _act(self, board, state, legal_moves) -> int:
+        """ makes a decision for the next move based on the current state. """
+
+        predictions = self.learner.predict(state)
+        action = self.exploration_strategy.choose_next_move(
+                                                          predictions,
+                                                          possible_moves = legal_moves
+                                                          )
+        board.action_by_id(action)
+        return action
+    
+    def _observe_state(self, board) -> Tuple[List[float], int, List[int], bool]:
+        """ wrapper function that extracts all required data from current board state. """
+
+        board_state = board.numeric_board_state()
+        state = self.board_encoder.extract_features(board_state)
+        score = board.current_score
+        legal_moves = board.get_open_moves()
+        finished = board.current_game_finished
+        return state, score, legal_moves, finished
+    
+    def load_nnet(self):
+        self.learner.policy_net = torch.load('model_checkpoint.pth')
+
 
     def save_nnet(self):
-        self.thinker.policy_net.save()
+        self.learner.policy_net.save()
 
 
 

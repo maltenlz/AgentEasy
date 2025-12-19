@@ -6,9 +6,9 @@ def number_to_str(numbers: tuple[int]):
     return ''.join(str(n) for n in numbers)
 
 def get_tile_by_idx(idx) -> list[int]:
-        ''' returns list of numbers based on idx in the mapping'''
-        tile_str = IDX_TO_TILE[number_to_str(idx)]
-        return [int(s) for s in tile_str]
+    ''' returns list of numbers based on idx in the mapping'''
+    tile_str = IDX_TO_TILE[number_to_str(idx)]
+    return [int(s) for s in tile_str]
 
 ALL_NUMBERS = list(itertools.product([1,5,9], [3,4,8], [2,6,7]))
 TILE_TO_IDX = {number_to_str(n): i for i, n in enumerate(ALL_NUMBERS)}
@@ -31,7 +31,6 @@ class BoardEncoder(ABC):
         Returns:
             np.array: containing all the features that are fed into the neural network.
         '''
-        return [0]
 
     def get_input_shape(self):
         ''' returns the shape, used to initiate the nnet '''
@@ -55,10 +54,10 @@ class SimpleOneHotEncoder(BoardEncoder):
     def _one_hot_encode_pieces(self, board_state):
         '''
         one hot encoding for each of the 20 spots on the board
-        outdim: 20*27 = 540
+        outdim: 19*27 = 513
         '''
         x_out = []
-        for board_spot in range(20):
+        for board_spot in range(19):
             x_out += [1 if piece == board_spot else 0 for piece in board_state]
         return x_out
 
@@ -75,7 +74,7 @@ class SimpleOneHotEncoder(BoardEncoder):
         one hot if piece is still out there
         outdim: 27
         '''
-        x_out = [1 if x == -1 else 0 for j, x in enumerate(board_state)]
+        x_out = [1 if x == -1 else 0 for x in board_state]
         return x_out
 
 class ColorPlusTileEncoder(SimpleOneHotEncoder):
@@ -101,7 +100,7 @@ class ColorPlusTileEncoder(SimpleOneHotEncoder):
         '''
         x_out = []
         for board_spot in list(range(20)) + [-2]:
-            x = [0]*9
+            x = [0]*10
             try:
                 tile_idx = board_state.index(board_spot)
                 nbr_str = IDX_TO_TILE[tile_idx]
@@ -109,16 +108,10 @@ class ColorPlusTileEncoder(SimpleOneHotEncoder):
                     x[int(nbr)-1] = 1
                 x_out += x
             except ValueError:
+                x[-1] = 1
                 x_out += x
         return x_out
 
     def _number_of_moves(self, board_state):
-        ''' How many tiles are places yet '''
-        return [sum(1 if pos > 0 else 0 for pos in board_state)]
-    
-    def _get_combination_counts(self, board_state):
-        ''' get counts of combinations '''
-        open_tiles = [IDX_TO_TILE[i] for i, tile in enumerate(board_state) if tile == 0]
-        #for n in range(1, 10):
-        return [sum(1 if pos > 0 else 0 for pos in board_state)]
-    
+        ''' How many tiles are placed yet '''
+        return [sum(1 if pos >= 0 else 0 for pos in board_state)]

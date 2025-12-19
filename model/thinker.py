@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from dataclasses import dataclass
 from model.memory import Experience
 from torchview import draw_graph
-
+from typing import Protocol, List
 class EasyNet(nn.Module):
     """ DQN learning for Takeing It Easy!"""
 
@@ -48,10 +48,20 @@ class LearningConfig:
     nsteps_target_update: int = 5
     size_scaler: int = 4
     weight_decay: float = 1e-4
+class IQLearning(Protocol):
+    """ Q Learning Interface to be used by the agent"""
+    def initialize_nnets(self, input_dims):
+        ...
 
-class Thinker:
+    def learn_from_experience(self, replay_memory):
+        ...
+    
+    def predict(self, state):
+        ...
+
+class DoubleQLearning(IQLearning):
     """ 
-       Class that contains the thinking of the Agent. 
+       Implements the double Q-learning.
     """
     def __init__(
                  self,
@@ -65,14 +75,11 @@ class Thinker:
         self.learning_steps = 0
     
     def initialize_nnets(self, input_dims):
-        self.target_net = EasyNet(size_scaler=LearningConfig.size_scaler, input_dim=input_dims)
-        self.policy_net = EasyNet(size_scaler=LearningConfig.size_scaler, input_dim=input_dims)
+        self.target_net = EasyNet(size_scaler=self.learning_config.size_scaler, input_dim=input_dims)
+        self.policy_net = EasyNet(size_scaler=self.learning_config.size_scaler, input_dim=input_dims)
         self.optimizer = optim.AdamW(params=self.policy_net.parameters(), lr=self.learning_config.lr, weight_decay=self.learning_config.weight_decay)
-
-    def learn_from_experience(
-            self,
-            replay_memory
-            ):
+ 
+    def learn_from_experience(self, replay_memory):
         """
             Takes a Learning Step, based on the provided memory Sample
         """
@@ -91,8 +98,8 @@ class Thinker:
         next_actions = torch.argmax(masked_q_values, dim=1)
         future_q_values = self.target_net(next_state).gather(1, next_actions.unsqueeze(1)).squeeze(1)
 
-        # doesnt add future reward if it was the last move
-        not_done_mask = torch.logical_not(done)  
+        # dont add future reward if it was the last move
+        not_done_mask = torch.logical_not(done)
         q_new = reward + self.learning_config.gamma * future_q_values * not_done_mask
 
         # Calculate TD errors with IS weights
@@ -102,20 +109,19 @@ class Thinker:
 
         self.optimizer.zero_grad()
         loss.backward()
-        nn.utils.clip_grad_value_(self.policy_net.parameters(), clip_value = 3)
+        nn.utils.clip_grad_norm_(self.policy_net.parameters(), max_norm = 3)
         self.optimizer.step()
         self.learning_steps += 1
 
-        if replay_memory.memory_type == 'PER':
-            td_errors = (q_new - td_target).detach().cpu().numpy()
-            for idx, error in zip(idxs, td_errors):
-                replay_memory.update(idx, error)
+        td_errors = (q_new - td_target).detach().cpu().numpy()
+        for idx, error in zip(idxs, td_errors):
+            replay_memory.update(idx, error)
 
         if self.learning_steps % self.learning_config.nsteps_target_update == 0:
             self._update_target_network()
 
     def predict(self, state):
-        ''' returns predicted reward for all 19 Tiles (containing illegal moves) based on the current state.'''
+        """ returns predicted reward for all 19 Tiles (containing illegal moves) based on the current state. """
         return self.policy_net.predict_value(state)
     
     def _update_target_network(self):
@@ -123,16 +129,17 @@ class Thinker:
             Soft update target model parameters. DDQN.
             θ_target = τ*θ_local + (1 - τ)*θ_target
         """  
-        for target_param, policy_param in zip(self.target_net.parameters(), self.policy_net.parameters()):
-            target_param.data.copy_(self.learning_config.tau*policy_param.data + (1.0-self.learning_config.tau)*target_param.data)
+        with torch.no_grad():
+            for target_param, policy_param in zip(self.target_net.parameters(), self.policy_net.parameters()):
+                target_param.data.copy_(self.learning_config.tau*policy_param.data + (1.0-self.learning_config.tau)*target_param.data)
 
     @staticmethod
     def _experiences_to_tensors(batch: list[Experience]) -> tuple[torch.tensor, torch.tensor, torch.tensor, torch.tensor, torch.tensor]:
         """ Transforms the batch of EXperiences into torch tensors """
-        state_t = torch.tensor(np.stack([e.state_t for e in batch]), dtype=torch.float).to(device)
-        state_t1 = torch.tensor(np.stack([e.state_t1 for e in batch]), dtype=torch.float).to(device)
-        actions = torch.tensor([e.action for e in batch], dtype=torch.long).to(device)
-        rewards = torch.tensor([e.reward for e in batch], dtype=torch.float).to(device)
-        dones = torch.tensor([e.finished for e in batch], dtype=torch.bool).to(device)
-        legal_moves = torch.tensor(np.stack([e.legal_moves for e in batch]), dtype=torch.long).to(device)
+        state_t = torch.stack([e.state_t for e in batch]).to(device)
+        state_t1 = torch.stack([e.state_t1 for e in batch]).to(device)
+        actions = torch.stack([e.action for e in batch]).to(device)
+        rewards = torch.stack([e.reward for e in batch]).to(device)
+        dones = torch.stack([e.finished for e in batch]).to(device)
+        legal_moves = torch.stack([e.legal_moves for e in batch]).to(device)
         return state_t, state_t1, actions, rewards, dones, legal_moves

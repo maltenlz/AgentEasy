@@ -1,29 +1,30 @@
 from dataclasses import dataclass
 import numpy as np
-from abc import ABC, abstractmethod
 from collections import deque
 import random
-from typing import Optional
+from typing import Optional, Protocol, List, Tuple
+from torchtyping import TensorType
+import torch
+
 @dataclass
 class Experience:
     ''' 
         container class to store experiences, to be learned from later
     '''
-    state_t: np.array
-    state_t1: np.array
-    action: int
-    reward: float
-    finished : bool
-    legal_moves: np.array
+    state_t: TensorType[torch.float32]
+    state_t1: TensorType[torch.float32]
+    action: TensorType[torch.int64]
+    reward: TensorType[torch.float32]
+    finished : TensorType[torch.bool]
+    legal_moves: TensorType[torch.long]
 
-class Memory(ABC):
+class IMemory(Protocol):
     ''' Object that stores and retrieves batches of Experiences from exploration.'''
-    @abstractmethod
+    
     def add(self, new_experience: Experience) -> None:
         ''' commits a new Experience to memory'''
-        
-    @abstractmethod
-    def sample(self, batch_size: int) -> tuple[Optional[list[int]], list[float], list[Experience]]:
+
+    def sample(self, batch_size: int) -> Tuple[List[int], List[float], List[Experience]]:
         ''' Sample from the Replay buffer
         Args: 
             int: batch size
@@ -33,8 +34,11 @@ class Memory(ABC):
             Optional[list]: list of priority values
             list: the Experiences sampled to be learned from
         '''
+    
+    def update(self, idx: int, td: float):
+        """ updates the priority for future sampling """
 
-class SimpleReplayBuffer(Memory):
+class SimpleReplayBuffer(IMemory):
     """ Simple Replay Buffer (Uniform Sampling) """
     def __init__(self, capacity):
         self.memory = deque(maxlen=capacity)
@@ -42,37 +46,43 @@ class SimpleReplayBuffer(Memory):
     def add(self, new_experience: Experience):
         self.memory.append(new_experience)
 
-    def sample(self, batch_size):
+    def sample(self, batch_size) -> Tuple[int | None, List[float], List[Experience]]:
         batch = random.sample(self.memory, batch_size)
         priority = [1]*batch_size
-        return None, priority, batch
+        pseudo_idx = [1]*batch_size
+        return pseudo_idx, priority, batch
     
+    def update(self, idx: int, td: float):
+        """ uniform sampling, so no updates required."""
+
     def __len__(self):
         return len(self.memory)
     
-    @property
-    def memory_type(self):
-        return 'Simple Random Buffer'
-class PERBuffer:
+class PERBuffer(IMemory):
     def __init__(self, capacity, alpha=0.6):
         self.tree = SumTree(capacity)
         self.alpha = alpha
-        self.epsilon = 1e-5  # to avoid zero priority
+        self.epsilon = 1e-5
+        self.beta=0.4
+        self.beta_annealing_rate = 1.002
 
-    def add(self, sample):
-        # set piority to max
-        max_p = np.max(self.tree.tree[-self.tree.capacity:])
-        if max_p == 0:
+    def add(self, experience: Experience):
+        leaf_nodes = self.tree.tree[-self.tree.capacity : -self.tree.capacity + self.tree.size]
+        if len(leaf_nodes) == 0:
             max_p = 1.0
-        p = max_p
-        self.tree.add(p, sample)
+        else:
+            max_p = np.max(leaf_nodes)
+            if max_p == 0:
+                max_p = 1.0
 
-    def sample(self, n, beta=0.4):
+        self.tree.add(max_p, experience)
+
+    def sample(self, n):
         batch = []
         idxs = []
         priorities = []
         segment = self.tree.total / n
-
+        self.beta = min(self.beta * 1.002, 1.0)
         for i in range(n):
             s = random.uniform(segment * i, segment * (i + 1))
             idx, p, data = self.tree.get(s)
@@ -82,17 +92,13 @@ class PERBuffer:
 
         total = self.tree.total
         probs = np.array(priorities) / total
-        weights = (self.tree.size * probs) ** (-beta)
-        weights = weights * (n / weights.sum())
+        weights = (self.tree.size * probs + 1e-8) ** -self.beta
+        weights /= weights.mean()
         return idxs, weights, batch
 
     def update(self, idx, error):
         p = (np.abs(error) + self.epsilon) ** self.alpha
         self.tree.update(idx, p)
-    
-    @property
-    def memory_type(self):
-        return 'PER'    
 
 class SumTree:
     def __init__(self, capacity):
@@ -120,10 +126,9 @@ class SumTree:
         self._propagate(idx, change)
 
     def _propagate(self, idx, change):
-        parent = (idx - 1) // 2
-        self.tree[parent] += change
-        if parent != 0:
-            self._propagate(parent, change)
+        while idx != 0:
+            idx = (idx - 1) // 2
+            self.tree[idx] += change
 
     def get(self, s):
         idx = self._retrieve(0, s)

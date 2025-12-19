@@ -1,43 +1,22 @@
 import matplotlib.pyplot as plt
-from IPython import display
 import pygame
 from take_it_easy.constants import WIDTH, HEIGHT
 from take_it_easy.board import Board
-from model.memory import SimpleReplayBuffer, PERBuffer
-from model.thinker import Thinker, EasyNet, LearningConfig
+from model.memory import PERBuffer, SimpleReplayBuffer
+from model.thinker import DoubleQLearning, LearningConfig
 from model.agent import AgentEasy
-from model.exploration import EpsilonGreedyStrategy, BoltzmannExploration, ExplorationConfig
-from model.value_functions import smooth_score, actual_score
+from model.exploration import BoltzmannExploration, ExplorationConfig, EpsilonGreedyStrategy
 from model.board_representation import SimpleOneHotEncoder, ColorPlusTileEncoder
 import mlflow
-import subprocess
 import numpy as np
-WIN = pygame.display.set_mode((WIDTH, HEIGHT))
-FPS = 60
+import time
 
+WIN = pygame.display.set_mode((WIDTH, HEIGHT))
+
+SAVE_GREEDY_MOVES = False
 pygame.display.set_caption("Take It Easy!")
 
-
-def get_git_commit():
-    ''' gets the current git commit '''
-    return subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode('ascii').strip()
-
 plt.ion()
-
-def plot_progress(scores, mean_scores):
-    display.clear_output(wait=True)
-    display.display(plt.gcf())
-    plt.clf()
-    plt.title('Current')
-    plt.xlabel('Number of Games')
-    plt.ylabel('Score')
-    plt.plot(scores)
-    plt.plot(mean_scores)
-    plt.ylim(ymin=0)
-    plt.text(len(scores)-1, scores[-1], str(scores[-1]))
-    plt.text(len(mean_scores)-1, mean_scores[-1], str(mean_scores[-1]))
-    plt.show(block=False)
-    plt.pause(.1)
 
 def check_if_converged(moving_avgs, window=10, warmup_periods=100, tolerance=5):
     ''' 
@@ -55,86 +34,85 @@ def check_if_converged(moving_avgs, window=10, warmup_periods=100, tolerance=5):
 
 if __name__ == "__main__":
 
-    # board encoder 
+    # Initiaize Board Encoder
     board_encoder = ColorPlusTileEncoder()
 
-    # Also intialize the Agent
-    thinker = Thinker(
-        learning_config=LearningConfig(lr = 0.00001, nsteps_target_update=1, tau=0.01, batch_size=128, size_scaler=16)
+    # Initialize Double-Q-Learning
+    double_q_learning = DoubleQLearning(
+        learning_config=LearningConfig(
+            lr = 0.00001,
+            nsteps_target_update=1,
+            tau=0.01,
+            batch_size=128,
+            size_scaler=2
+            )
         )
-    thinker.initialize_nnets(board_encoder.get_input_shape())
-    thinker.target_net.plot_nnet()
-    memory = PERBuffer(capacity=2_000_000)
-    exploration_strategy = BoltzmannExploration(config = ExplorationConfig(tau0=0.7, taumin=0.01, tau_decay_rate=0.0000025))
+    double_q_learning.initialize_nnets(board_encoder.get_input_shape())
+    double_q_learning.target_net.plot_nnet()
+
+    memory = SimpleReplayBuffer(capacity=400_000)
+    
+    exploration_strategy = EpsilonGreedyStrategy(
+        config = ExplorationConfig(epsilon0=0.7, epsilonmin=0.1, epsilon_decay_rate=200_000)
+        )
     exploration_strategy.plot()
+    
     agent = AgentEasy(
-    thinker=thinker,
-    memory=memory,
-    exploration_strategy=exploration_strategy,
-    board_encoder=board_encoder,
-    value_function=actual_score
+        learner=double_q_learning,
+        memory=memory,
+        exploration_strategy=exploration_strategy,
+        board_encoder=board_encoder
     )
+    
     print(agent.board_encoder.get_input_shape())
+
     # Initialize the train loop
     game_scores = []
     mean_scores = []
 
     # Initialize mlflow
     mlflow.set_experiment("AgentEasy")
+    start = time.time()
+
     with mlflow.start_run():
 
-        i = 0
-        mlflow.log_params(agent.thinker.learning_config.__dict__)
+        n_games = 1
+        mlflow.log_params(agent.learner.learning_config.__dict__)
         mlflow.log_params(agent.exploration_strategy.config.__dict__)
-        mlflow.log_param('Exploration Strategy', agent.exploration_strategy.strategy_name)
-        mlflow.log_param('Memory Type', agent.replay_memory.memory_type)
+        mlflow.log_param('Exploration Strategy', agent.exploration_strategy.__class__.__name__)
+        mlflow.log_param('Save greey moves', SAVE_GREEDY_MOVES)
+        mlflow.log_param('Memory Type', agent.replay_memory.__class__.__name__)
         mlflow.log_param('Board Representation', agent.board_encoder.__class__.__name__)
-
-        mlflow.log_param('Nnet Parameters', len([p for p in agent.thinker.policy_net.parameters()]))
+        num_params = sum(p.numel() for p in agent.learner.policy_net.parameters())
+        mlflow.log_param('Nnet Parameters', num_params)
         mlflow.log_artifact("nnet_architecture.png")
-
+        mlflow.log_artifact("visualisations/exploration_schedule.png")
         # Initialize the game
         clock = pygame.time.Clock()
         board = Board(WIN)
-        converged = False
 
         # Start the trainloop
-        while not converged:
-            clock.tick(FPS)
-            for event in pygame.event.get():
-                if event.type == pygame.MOUSEBUTTONUP:
-                    board.action_by_mouse(event.pos)
-                if event.type == pygame.MOUSEBUTTONUP:
-                    pass
-                if event.type == pygame.QUIT:
-                    break
-            game_not_finished = board.tiles_placed < 19
-            if game_not_finished:
-                agent.act_and_observe_action(board)
-                if i > 21*19:
+        while True:
+            if not board.current_game_finished:
+                make_greedy_move = (n_games % 100) >= 90
+                agent.act_and_observe_action(board, make_greedy_move)
+                if n_games > 10:
                     agent.learn()
-                i += 1
             else:
-                game_scores.append(board.calculated_score)
-                last_100_games = np.array(game_scores[-100:])
-
-                mean_score = np.mean(last_100_games)
-                median_score = np.median(last_100_games)
-                p_10_score = np.quantile(last_100_games, q=0.1)
-                p_90_score = np.quantile(last_100_games, q=0.9)
-
-                mean_scores.append(mean_score)
-                if i % 100 == 0:
-                    plot_progress(game_scores, mean_scores)
-                    mlflow.log_metric("Mean Score", mean_score, step=i)
-                    mlflow.log_metric("Median Score", median_score, step=i)
-                    mlflow.log_metric("P10 Score", p_10_score, step=i)
-                    mlflow.log_metric("P90 Score", p_90_score, step=i)
-                board.refresh()
-            if i == 4_000_000:
+                game_scores.append(board.current_score)
+                if n_games % 100 == 0:
+                    last_10_games = np.array(game_scores[-10:])
+                    mean_score = np.mean(last_10_games)
+                    mlflow.log_metric("Mean Score", mean_score, step=n_games)
+                board.reset_game()
+                n_games += 1
+                if n_games % 1000 == 0:
+                    agent.save_nnet()
+                    end = time.time()
+                    print(f"Time for {n_games} games: {end - start:.2f} seconds")
+            
+            if n_games == 300_000:
                 break
-            board.draw_board()
-            if i % 20000 == 0:
-                agent.save_nnet()
-            pygame.display.update()
+            # board.render_board()
+            # pygame.display.update()
         pygame.quit()
