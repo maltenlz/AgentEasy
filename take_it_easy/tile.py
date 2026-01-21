@@ -1,15 +1,27 @@
-import pygame
 import math
-from typing import List, Tuple
-from take_it_easy.constants import COLORS_NUMBERS, DIRECTION_NUMBERS, APOTHEM, GREY, BLACK, TILE_BACKGROUND, WIDTH, HEIGHT
+
+import pygame
+
+from take_it_easy.constants import (
+    APOTHEM,
+    BLACK,
+    COLORS_NUMBERS,
+    DIRECTION_NUMBERS,
+    GREY,
+    HEIGHT,
+    TILE_BACKGROUND,
+    WIDTH,
+)
 
 NEXT_TILE_X = WIDTH * 0.42
 NEXT_TILE_Y = HEIGHT * 0.01
 
 ### utility functions to check if a point is inside a hexagon
 
+
 def cross_product_2d(v1, v2) -> float:
     return v1[0] * v2[1] - v1[1] * v2[0]
+
 
 def is_point_in_hexagon(point, hexagon) -> bool:
     for i, edge in enumerate(hexagon):
@@ -22,9 +34,9 @@ def is_point_in_hexagon(point, hexagon) -> bool:
     return True
 
 
-def calc_hexagon_points(center_x,center_y, apothem, scale) -> List[Tuple[float]]:
+def calc_hexagon_points(center_x, center_y, apothem, scale) -> list[tuple[float]]:
     points = []
-    radius = apothem * 2*3**0.5/3 * scale
+    radius = apothem * 2 * 3**0.5 / 3 * scale
 
     for _ in range(6):
         angle = _ * (2 * math.pi / 6)
@@ -33,16 +45,18 @@ def calc_hexagon_points(center_x,center_y, apothem, scale) -> List[Tuple[float]]
         points.append((x, y))
     return points
 
+
 ### class that represents a tile, implements drawing and click handling
+
 
 class Tile:
     def __init__(self, center_x, center_y, numbers: list = None) -> None:
         if numbers is None:
-            numbers = [0,0,0]
+            numbers = [0, 0, 0]
         self.numbers = numbers
         self.points = calc_hexagon_points(center_x, center_y, APOTHEM, 0.97)
         self.points_boarder = calc_hexagon_points(center_x, center_y, APOTHEM, 1)
-    
+
     def render_tile(self, win: pygame.Surface) -> None:
         pygame.draw.polygon(win, BLACK, self.points_boarder)
         pygame.draw.polygon(win, TILE_BACKGROUND, self.points)
@@ -56,13 +70,13 @@ class Tile:
 
     def contains_point(self, point):
         return is_point_in_hexagon(point, self.points)
-    
+
     def change_location_to_next_tile(self):
         self.points = calc_hexagon_points(NEXT_TILE_X, NEXT_TILE_Y, APOTHEM, 0.97)
         self.points_boarder = calc_hexagon_points(NEXT_TILE_X, NEXT_TILE_Y, APOTHEM, 1)
 
     def copy(self):
-        """ faster than deepcopy and saver to use than copy() """
+        """faster than deepcopy and saver to use than copy()"""
         new_tile = Tile.__new__(Tile)
         new_tile.numbers = list(self.numbers)
         new_tile.points = list(self.points)

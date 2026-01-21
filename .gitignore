@@ -4,3 +4,4 @@ mlruns/
 nnet_architecture*
 EasyNet*
 model_checkpoint.pth
+.*

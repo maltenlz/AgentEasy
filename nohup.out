@@ -1,7 +1,0 @@
-[2025-05-11 09:49:18 +0200] [8916] [INFO] Starting gunicorn 23.0.0
-[2025-05-11 09:49:18 +0200] [8916] [INFO] Listening at: http://127.0.0.1:5000 (8916)
-[2025-05-11 09:49:18 +0200] [8916] [INFO] Using worker: sync
-[2025-05-11 09:49:18 +0200] [8917] [INFO] Booting worker with pid: 8917
-[2025-05-11 09:49:18 +0200] [8918] [INFO] Booting worker with pid: 8918
-[2025-05-11 09:49:18 +0200] [8919] [INFO] Booting worker with pid: 8919
-[2025-05-11 09:49:18 +0200] [8920] [INFO] Booting worker with pid: 8920

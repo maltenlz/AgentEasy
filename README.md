@@ -1,7 +1,9 @@
 # Using Reinforcement Learning on the Board Game Take It Easy!
 
-
 ## Overview
+### Take it easy!
+Implementation in Pygame, can be played out of the box.
+
 
 ### Reinforcement Learning frameworks used
 This project uses Deep Double Q-Learning to train an Agent by playing a large number of games against itself, with no further guidance provided.
@@ -22,3 +24,21 @@ The Software relies heavily on Composition for three reasons:
 
 There is also a clear seperation between the game itself and the agent. The Implementation relies heavily on Python classes and therefor focusses on convenience and readibility and not on performance.
 Deep-Learning is implemented in Pytorch.
+
+```
+pip install uv
+uv sync
+```
+
+to play the game:
+
+```
+uv run main.py
+```
+
+to train the RL agent
+
+```
+uv run train_loop.py
+```
+
